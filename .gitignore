@@ -1,0 +1,17 @@
+# 빌드 결과물
+bin/
+obj/
+.vs/
+
+# 사용자별 설정
+*.user
+*.suo
+
+# WinForms 시절 백업 파일
+*.bak
+
+# 설치 파일 빌드 산출물 (OctoPlayer.iss, build.ps1은 추적함)
+Setup/publish/
+Setup/Output/
+Setup/Debug/
+Setup/Release/
