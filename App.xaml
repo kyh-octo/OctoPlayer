@@ -4,6 +4,10 @@
              xmlns:local="clr-namespace:OctoPlayer">
     <Application.Resources>
         <ResourceDictionary>
+            <!-- 언어 문자열: 한국어가 기본이며, 영어 선택 시 Strings.en.xaml이 뒤에 추가되어 우선합니다(Loc.Apply). -->
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Resources/Strings.ko.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
 
             <!-- ===== 팔레트 ===== -->
             <Color x:Key="BgColor">#18181C</Color>

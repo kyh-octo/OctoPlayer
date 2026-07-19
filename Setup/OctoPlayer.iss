@@ -7,7 +7,7 @@
 ; ============================================================================
 
 #define MyAppName "OctoPlayer"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.1.0"
 #define MyAppPublisher "OctoBrain Softworks"
 #define MyAppExeName "OctoPlayer.exe"
 #define MyGroupName "OctoBrain"
@@ -59,3 +59,106 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; \
     Flags: nowait postinstall skipifsilent
+
+[Code]
+{ ============================================================================
+  파일 연결 등록/정리.
+  설치 시: 설치 경로 기준으로 ProgID + "연결 프로그램" 후보 + 기본 앱(Capabilities)을
+           등록합니다. 예전 실행 파일 경로가 레지스트리에 박제되어 삭제 후에도
+           "죽은 OctoPlayer"가 목록에 남는 문제를 막습니다. (기본 앱 지정 자체는
+           Windows 정책상 사용자가 직접 선택해야 하며, 여기서는 후보 등록만 합니다.)
+  제거 시: 설치 영역(HKA)과 앱이 직접 쓴 사용자 영역(HKCU) 등록을 모두 정리합니다.
+  ============================================================================ }
+const
+  ProgId = 'OctoPlayer.MediaFile';
+  ExtList = '.mp4,.m4v,.mkv,.avi,.mov,.wmv,.flv,.webm,.ts,.m2ts,.mts,.mpg,.mpeg,.mpe,.m2v,.vob,' +
+            '.3gp,.3g2,.ogv,.ogm,.rm,.rmvb,.asf,.divx,.f4v,.mxf,.dav,' +
+            '.mp3,.flac,.aac,.m4a,.wav,.wma,.ogg,.oga,.opus,.ac3,.dts,.ape,.alac,.aiff,.mka';
+  SHCNE_ASSOCCHANGED = $08000000;
+
+procedure SHChangeNotify(EventID: Integer; Flags: Cardinal; Item1, Item2: Integer);
+  external 'SHChangeNotify@shell32.dll stdcall';
+
+{ 쉼표 목록에서 다음 항목을 꺼냅니다. Rest가 비면 끝. }
+function NextExt(var Rest: String): String;
+var
+  P: Integer;
+begin
+  P := Pos(',', Rest);
+  if P > 0 then
+  begin
+    Result := Copy(Rest, 1, P - 1);
+    Rest := Copy(Rest, P + 1, MaxInt);
+  end
+  else
+  begin
+    Result := Rest;
+    Rest := '';
+  end;
+end;
+
+procedure RegisterFileAssociations();
+var
+  Exe, Ext, Rest: String;
+begin
+  Exe := ExpandConstant('{app}\{#MyAppExeName}');
+
+  RegWriteStringValue(HKA, 'Software\Classes\' + ProgId, '', 'OctoPlayer 미디어 파일');
+  RegWriteStringValue(HKA, 'Software\Classes\' + ProgId + '\DefaultIcon', '', '"' + Exe + '",0');
+  RegWriteStringValue(HKA, 'Software\Classes\' + ProgId + '\shell\open', '', 'OctoPlayer로 재생');
+  RegWriteStringValue(HKA, 'Software\Classes\' + ProgId + '\shell\open\command', '', '"' + Exe + '" "%1"');
+
+  RegWriteStringValue(HKA, 'Software\{#MyAppName}\Capabilities', 'ApplicationName', '{#MyAppName}');
+  RegWriteStringValue(HKA, 'Software\{#MyAppName}\Capabilities', 'ApplicationDescription',
+    'OctoBrain Softworks 동영상 플레이어');
+  RegWriteStringValue(HKA, 'Software\RegisteredApplications', '{#MyAppName}',
+    'Software\{#MyAppName}\Capabilities');
+
+  Rest := ExtList;
+  while Rest <> '' do
+  begin
+    Ext := NextExt(Rest);
+    RegWriteStringValue(HKA, 'Software\Classes\' + Ext + '\OpenWithProgids', ProgId, '');
+    RegWriteStringValue(HKA, 'Software\{#MyAppName}\Capabilities\FileAssociations', Ext, ProgId);
+  end;
+
+  SHChangeNotify(SHCNE_ASSOCCHANGED, 0, 0, 0);
+end;
+
+{ 지정한 루트(HKA 또는 HKCU)에서 등록 흔적을 지웁니다. }
+procedure CleanFileAssociations(Root: Integer);
+var
+  Ext, Rest: String;
+begin
+  RegDeleteKeyIncludingSubkeys(Root, 'Software\Classes\' + ProgId);
+  RegDeleteKeyIncludingSubkeys(Root, 'Software\{#MyAppName}');
+  RegDeleteValue(Root, 'Software\RegisteredApplications', '{#MyAppName}');
+
+  Rest := ExtList;
+  while Rest <> '' do
+  begin
+    Ext := NextExt(Rest);
+    RegDeleteValue(Root, 'Software\Classes\' + Ext + '\OpenWithProgids', ProgId);
+  end;
+
+  { 탐색기의 "다른 앱 선택 → 찾아보기"가 만드는 항목: 앱이 제거되므로 함께 정리 }
+  RegDeleteKeyIncludingSubkeys(Root, 'Software\Classes\Applications\{#MyAppExeName}');
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then
+  begin
+    RegisterFileAssociations();
+  end;
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep = usPostUninstall then
+  begin
+    CleanFileAssociations(HKA);
+    CleanFileAssociations(HKCU);
+    SHChangeNotify(SHCNE_ASSOCCHANGED, 0, 0, 0);
+  end;
+end;

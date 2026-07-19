@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using OctoPlayer.Services;
 
 namespace OctoPlayer
 {
@@ -59,12 +60,15 @@ namespace OctoPlayer
         private readonly CheckBox _rememberSizeBox;
         private readonly CheckBox _alwaysOnTopBox;
         private readonly TextBox _captureFolderBox;
+        private readonly RadioButton _langAuto;
+        private readonly RadioButton _langKo;
+        private readonly RadioButton _langEn;
 
         public SettingsWindow(Services.AppSettings settings)
         {
             _settings = settings;
-            Title = "환경 설정";
-            DialogTheme.Setup(this, 480, 680);
+            Title = Loc.T("S_SettingsTitle");
+            DialogTheme.Setup(this, 480, 760);
 
             var root = new StackPanel { Margin = new Thickness(20, 12, 20, 0) };
 
@@ -110,39 +114,62 @@ namespace OctoPlayer
             }
 
             // ----- 탐색 -----
-            root.Children.Add(Section("탐색"));
-            _sideSkipBox = NumberRow("마우스 뒤로/앞으로 버튼 이동 시간", settings.SkipSeconds, "초");
-            _arrowSkipBox = NumberRow("방향키(←/→) 이동 시간", settings.ArrowSkipSeconds, "초");
+            root.Children.Add(Section(Loc.T("S_SecNav")));
+            _sideSkipBox = NumberRow(Loc.T("S_SideSkip"), settings.SkipSeconds, Loc.T("S_Seconds"));
+            _arrowSkipBox = NumberRow(Loc.T("S_ArrowSkip"), settings.ArrowSkipSeconds, Loc.T("S_Seconds"));
 
             // ----- 소리 -----
-            root.Children.Add(Section("소리"));
-            _volumeStepBox = NumberRow("휠/방향키(↑/↓) 볼륨 조절량", settings.WheelVolumeStep, "단계");
+            root.Children.Add(Section(Loc.T("S_SecAudio")));
+            _volumeStepBox = NumberRow(Loc.T("S_VolumeStep"), settings.WheelVolumeStep, Loc.T("S_Steps"));
 
             // ----- 재생 -----
-            root.Children.Add(Section("재생"));
-            _resumeBox = CheckRow("마지막으로 본 위치에서 이어서 재생", settings.ResumePlayback);
-            _rememberRateBox = CheckRow("종료 시 재생 속도 기억", settings.RememberRate);
+            root.Children.Add(Section(Loc.T("S_SecPlayback")));
+            _resumeBox = CheckRow(Loc.T("S_ResumeOpt"), settings.ResumePlayback);
+            _rememberRateBox = CheckRow(Loc.T("S_RememberRateOpt"), settings.RememberRate);
 
             // ----- 자막 -----
-            root.Children.Add(Section("자막"));
-            _autoSubBox = CheckRow("같은 이름의 자막 파일 자동 불러오기", settings.AutoLoadSubtitles);
+            root.Children.Add(Section(Loc.T("S_SecSubtitles")));
+            _autoSubBox = CheckRow(Loc.T("S_AutoSubOpt"), settings.AutoLoadSubtitles);
 
             // ----- 화면 -----
-            root.Children.Add(Section("화면"));
-            _rememberSizeBox = CheckRow("종료 시 창 크기 기억", settings.RememberWindowSize);
-            _alwaysOnTopBox = CheckRow("항상 위에 표시", settings.AlwaysOnTop);
+            root.Children.Add(Section(Loc.T("S_SecDisplay")));
+            _rememberSizeBox = CheckRow(Loc.T("S_RememberSizeOpt"), settings.RememberWindowSize);
+            _alwaysOnTopBox = CheckRow(Loc.T("S_AlwaysOnTopOpt"), settings.AlwaysOnTop);
+
+            // ----- 언어 -----
+            root.Children.Add(Section(Loc.T("S_SecLanguage")));
+            RadioButton LangRadio(string label, bool isChecked)
+            {
+                var radio = new RadioButton
+                {
+                    Content = label,
+                    GroupName = "UiLanguage",
+                    IsChecked = isChecked,
+                    Margin = new Thickness(0, 2, 18, 2),
+                    VerticalContentAlignment = VerticalAlignment.Center
+                };
+                return radio;
+            }
+            _langAuto = LangRadio(Loc.T("S_LangAuto"), string.IsNullOrEmpty(settings.Language));
+            _langKo = LangRadio("한국어", settings.Language == "ko");
+            _langEn = LangRadio("English", settings.Language == "en");
+            var langRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 2) };
+            langRow.Children.Add(_langAuto);
+            langRow.Children.Add(_langKo);
+            langRow.Children.Add(_langEn);
+            root.Children.Add(langRow);
 
             // ----- 캡처 -----
-            root.Children.Add(Section("캡처"));
+            root.Children.Add(Section(Loc.T("S_SecCapture")));
             _captureFolderBox = new TextBox
             {
                 Text = settings.CaptureFolder ?? string.Empty,
                 VerticalAlignment = VerticalAlignment.Center
             };
-            var browse = DialogTheme.MakeButton("찾아보기...");
+            var browse = DialogTheme.MakeButton(Loc.T("S_Browse"));
             browse.Click += (_, _) =>
             {
-                var dialog = new Microsoft.Win32.OpenFolderDialog { Title = "캡처 저장 폴더 선택" };
+                var dialog = new Microsoft.Win32.OpenFolderDialog { Title = Loc.T("S_SelectCaptureFolder") };
                 if (dialog.ShowDialog(this) == true)
                 {
                     _captureFolderBox.Text = dialog.FolderName;
@@ -154,14 +181,14 @@ namespace OctoPlayer
             folderRow.Children.Add(_captureFolderBox);
             root.Children.Add(new TextBlock
             {
-                Text = "저장 폴더 (비워 두면 사진\\OctoPlayer)",
+                Text = Loc.T("S_CaptureFolderHint"),
                 Margin = new Thickness(0, 0, 0, 4),
                 Foreground = (Brush)Application.Current.FindResource("TextDimBrush")
             });
             root.Children.Add(folderRow);
 
             // ----- 파일 연결 (즉시 적용) -----
-            root.Children.Add(Section("파일 연결"));
+            root.Children.Add(Section(Loc.T("S_SecAssoc")));
             var assocStatus = new TextBlock
             {
                 Foreground = (Brush)Application.Current.FindResource("TextDimBrush"),
@@ -171,32 +198,30 @@ namespace OctoPlayer
             void RefreshAssocStatus()
             {
                 assocStatus.Text = Services.FileAssociations.IsRegistered
-                    ? "등록됨 — 파일 우클릭 > 연결 프로그램, 또는 Windows 설정 > 기본 앱에서 OctoPlayer를 선택할 수 있습니다."
-                    : "등록되지 않음 — 등록하면 동영상/음악 파일을 OctoPlayer로 열 수 있게 됩니다.";
+                    ? Loc.T("S_AssocRegistered")
+                    : Loc.T("S_AssocNotRegistered");
             }
             RefreshAssocStatus();
 
-            var assocRegister = DialogTheme.MakeButton("확장자 연결 등록", accent: true);
+            var assocRegister = DialogTheme.MakeButton(Loc.T("S_AssocRegister"), accent: true);
             assocRegister.Margin = new Thickness(0, 0, 6, 0);
             assocRegister.Click += (_, _) =>
             {
                 try
                 {
                     Services.FileAssociations.Register();
-                    MessageBox.Show(this,
-                        "등록되었습니다.\n\n기본 플레이어로 쓰려면 동영상 파일 우클릭 → 연결 프로그램 → " +
-                        "다른 앱 선택 → OctoPlayer → '항상 사용'을 선택하세요.",
-                        "파일 연결", MessageBoxButton.OK, MessageBoxImage.Information);
+                    MessageBox.Show(this, Loc.T("S_AssocDoneMsg"),
+                        Loc.T("S_SecAssoc"), MessageBoxButton.OK, MessageBoxImage.Information);
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show(this, $"등록에 실패했습니다.\n{ex.Message}",
-                        "파일 연결", MessageBoxButton.OK, MessageBoxImage.Error);
+                    MessageBox.Show(this, Loc.F("S_AssocFailMsg", ex.Message),
+                        Loc.T("S_SecAssoc"), MessageBoxButton.OK, MessageBoxImage.Error);
                 }
                 RefreshAssocStatus();
             };
 
-            var assocRemove = DialogTheme.MakeButton("연결 해제");
+            var assocRemove = DialogTheme.MakeButton(Loc.T("S_AssocUnregister"));
             assocRemove.Click += (_, _) =>
             {
                 try
@@ -205,8 +230,8 @@ namespace OctoPlayer
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show(this, $"해제에 실패했습니다.\n{ex.Message}",
-                        "파일 연결", MessageBoxButton.OK, MessageBoxImage.Error);
+                    MessageBox.Show(this, Loc.F("S_AssocUnregFailMsg", ex.Message),
+                        Loc.T("S_SecAssoc"), MessageBoxButton.OK, MessageBoxImage.Error);
                 }
                 RefreshAssocStatus();
             };
@@ -218,10 +243,10 @@ namespace OctoPlayer
             root.Children.Add(assocRow);
 
             // ----- 확인/취소 -----
-            Button ok = DialogTheme.MakeButton("확인", accent: true);
+            Button ok = DialogTheme.MakeButton(Loc.T("S_OK"), accent: true);
             ok.IsDefault = true;
             ok.Click += (_, _) => { Apply(); DialogResult = true; };
-            Button cancel = DialogTheme.MakeButton("취소");
+            Button cancel = DialogTheme.MakeButton(Loc.T("S_Cancel"));
             cancel.IsCancel = true;
             cancel.Click += (_, _) => { DialogResult = false; };
 
@@ -258,6 +283,9 @@ namespace OctoPlayer
             _settings.CaptureFolder = string.IsNullOrWhiteSpace(_captureFolderBox.Text)
                 ? null
                 : _captureFolderBox.Text.Trim();
+            _settings.Language = _langKo.IsChecked == true ? "ko"
+                : _langEn.IsChecked == true ? "en"
+                : null;
         }
     }
 
@@ -281,7 +309,7 @@ namespace OctoPlayer
                 Margin = new Thickness(14)
             };
 
-            Button close = DialogTheme.MakeButton("닫기", accent: true);
+            Button close = DialogTheme.MakeButton(Loc.T("S_Close"), accent: true);
             close.Click += (_, _) => Close();
             close.IsCancel = true;
             close.HorizontalAlignment = HorizontalAlignment.Right;
@@ -313,10 +341,10 @@ namespace OctoPlayer
 
             _input = new TextBox { Margin = new Thickness(18, 8, 18, 0) };
 
-            Button ok = DialogTheme.MakeButton("확인", accent: true);
+            Button ok = DialogTheme.MakeButton(Loc.T("S_OK"), accent: true);
             ok.Click += (_, _) => { _accepted = true; Close(); };
             ok.IsDefault = true;
-            Button cancel = DialogTheme.MakeButton("취소");
+            Button cancel = DialogTheme.MakeButton(Loc.T("S_Cancel"));
             cancel.Click += (_, _) => Close();
             cancel.IsCancel = true;
 
@@ -351,7 +379,7 @@ namespace OctoPlayer
     {
         public ControllerWindow(MainWindow player)
         {
-            Title = "제어창";
+            Title = Loc.T("S_ControllerTitle");
             DialogTheme.Setup(this, 320, 96);
             Topmost = true;
             WindowStartupLocation = WindowStartupLocation.Manual;

@@ -98,110 +98,110 @@
                 <!-- ===== 우클릭 컨텍스트 메뉴 (UI 정의부) ===== -->
                 <Grid.ContextMenu>
                     <ContextMenu x:Name="MainMenu" Opened="MainMenu_Opened">
-                        <MenuItem Header="열기">
-                            <MenuItem Header="파일 열기..." InputGestureText="F3" Click="Menu_OpenFile"/>
-                            <MenuItem Header="주소 열기..." InputGestureText="Ctrl+U" Click="Menu_OpenUrl"/>
-                            <MenuItem Header="폴더 열기..." InputGestureText="F2" Click="Menu_OpenFolder"/>
+                        <MenuItem Header="{DynamicResource S_MenuOpen}">
+                            <MenuItem Header="{DynamicResource S_OpenFile}" InputGestureText="F3" Click="Menu_OpenFile"/>
+                            <MenuItem Header="{DynamicResource S_OpenUrl}" InputGestureText="Ctrl+U" Click="Menu_OpenUrl"/>
+                            <MenuItem Header="{DynamicResource S_OpenFolder}" InputGestureText="F2" Click="Menu_OpenFolder"/>
                         </MenuItem>
-                        <MenuItem Header="닫기" InputGestureText="F4" Click="Menu_CloseMedia"/>
+                        <MenuItem Header="{DynamicResource S_Close}" InputGestureText="F4" Click="Menu_CloseMedia"/>
                         <Separator/>
-                        <MenuItem Header="재생">
-                            <MenuItem Header="재생/일시 중지" InputGestureText="Space" Click="Menu_PlayPause"/>
-                            <MenuItem Header="이전 파일 재생" InputGestureText="PgUp" Click="Menu_PrevFile"/>
-                            <MenuItem Header="다음 파일 재생" InputGestureText="PgDn" Click="Menu_NextFile"/>
+                        <MenuItem Header="{DynamicResource S_MenuPlay}">
+                            <MenuItem Header="{DynamicResource S_PlayPause}" InputGestureText="Space" Click="Menu_PlayPause"/>
+                            <MenuItem Header="{DynamicResource S_PrevFile}" InputGestureText="PgUp" Click="Menu_PrevFile"/>
+                            <MenuItem Header="{DynamicResource S_NextFile}" InputGestureText="PgDn" Click="Menu_NextFile"/>
                             <Separator/>
-                            <MenuItem Header="재생 속도">
-                                <MenuItem Header="느리게 (0.1배)" InputGestureText="X" Click="Menu_SpeedDown"/>
-                                <MenuItem Header="빠르게 (0.1배)" InputGestureText="C" Click="Menu_SpeedUp"/>
-                                <MenuItem Header="보통 속도 (1.0배)" InputGestureText="Z" Click="Menu_SpeedReset"/>
+                            <MenuItem Header="{DynamicResource S_Speed}">
+                                <MenuItem Header="{DynamicResource S_SpeedDown}" InputGestureText="X" Click="Menu_SpeedDown"/>
+                                <MenuItem Header="{DynamicResource S_SpeedUp}" InputGestureText="C" Click="Menu_SpeedUp"/>
+                                <MenuItem Header="{DynamicResource S_SpeedReset}" InputGestureText="Z" Click="Menu_SpeedReset"/>
                             </MenuItem>
-                            <MenuItem Header="구간 반복">
-                                <MenuItem x:Name="MiAbA" Header="시작 지점 지정 (A)" InputGestureText="[" Click="Menu_AbSetA"/>
-                                <MenuItem x:Name="MiAbB" Header="끝 지점 지정 (B)" InputGestureText="]" Click="Menu_AbSetB"/>
-                                <MenuItem Header="구간 반복 해제" Click="Menu_AbClear"/>
+                            <MenuItem Header="{DynamicResource S_AbRepeat}">
+                                <MenuItem x:Name="MiAbA" Header="{DynamicResource S_AbSetA}" InputGestureText="[" Click="Menu_AbSetA"/>
+                                <MenuItem x:Name="MiAbB" Header="{DynamicResource S_AbSetB}" InputGestureText="]" Click="Menu_AbSetB"/>
+                                <MenuItem Header="{DynamicResource S_AbClear}" Click="Menu_AbClear"/>
                             </MenuItem>
-                            <MenuItem x:Name="MiRepeatMode" Header="반복 재생 토글" Click="Menu_CycleRepeat"/>
-                            <MenuItem x:Name="MiShuffle" Header="셔플 재생" Click="Menu_ToggleShuffle"/>
+                            <MenuItem x:Name="MiRepeatMode" Header="{DynamicResource S_RepeatToggle}" Click="Menu_CycleRepeat"/>
+                            <MenuItem x:Name="MiShuffle" Header="{DynamicResource S_Shuffle}" Click="Menu_ToggleShuffle"/>
                         </MenuItem>
-                        <MenuItem Header="자막">
-                            <MenuItem x:Name="MiSubVisible" Header="자막 보이기" InputGestureText="Alt+H" Click="Menu_ToggleSubtitles"/>
-                            <MenuItem Header="자막 열기..." InputGestureText="Alt+O" Click="Menu_OpenSubtitle"/>
+                        <MenuItem Header="{DynamicResource S_MenuSubtitles}">
+                            <MenuItem x:Name="MiSubVisible" Header="{DynamicResource S_SubVisible}" InputGestureText="Alt+H" Click="Menu_ToggleSubtitles"/>
+                            <MenuItem Header="{DynamicResource S_OpenSubtitle}" InputGestureText="Alt+O" Click="Menu_OpenSubtitle"/>
                             <Separator/>
-                            <MenuItem Header="자막 싱크">
-                                <MenuItem Header="0.5초 느리게" InputGestureText="," Click="Menu_SubDelayMinus"/>
-                                <MenuItem Header="0.5초 빠르게" InputGestureText="." Click="Menu_SubDelayPlus"/>
-                                <MenuItem Header="싱크 초기화" Click="Menu_SubDelayReset"/>
+                            <MenuItem Header="{DynamicResource S_SubSync}">
+                                <MenuItem Header="{DynamicResource S_SubSlower}" InputGestureText="," Click="Menu_SubDelayMinus"/>
+                                <MenuItem Header="{DynamicResource S_SubFaster}" InputGestureText="." Click="Menu_SubDelayPlus"/>
+                                <MenuItem Header="{DynamicResource S_SubSyncReset}" Click="Menu_SubDelayReset"/>
                             </MenuItem>
                             <Separator/>
-                            <MenuItem x:Name="MiSubTracks" Header="자막 트랙">
-                                <MenuItem Header="(없음)" IsEnabled="False"/>
+                            <MenuItem x:Name="MiSubTracks" Header="{DynamicResource S_SubTracks}">
+                                <MenuItem Header="{DynamicResource S_None}" IsEnabled="False"/>
                             </MenuItem>
                         </MenuItem>
-                        <MenuItem Header="영상">
-                            <MenuItem Header="영상 캡처" InputGestureText="Ctrl+S" Click="Menu_Capture"/>
-                            <MenuItem Header="화면 회전" InputGestureText="R" Click="Menu_Rotate"/>
+                        <MenuItem Header="{DynamicResource S_MenuVideo}">
+                            <MenuItem Header="{DynamicResource S_Capture}" InputGestureText="Ctrl+S" Click="Menu_Capture"/>
+                            <MenuItem Header="{DynamicResource S_Rotate}" InputGestureText="R" Click="Menu_Rotate"/>
                             <Separator/>
-                            <MenuItem Header="영상 속성">
-                                <MenuItem Header="명도 높이기" Click="Menu_BrightUp"/>
-                                <MenuItem Header="명도 낮추기" Click="Menu_BrightDown"/>
-                                <MenuItem Header="대비 높이기" Click="Menu_ContrastUp"/>
-                                <MenuItem Header="대비 낮추기" Click="Menu_ContrastDown"/>
-                                <MenuItem Header="채도 높이기" Click="Menu_SaturationUp"/>
-                                <MenuItem Header="채도 낮추기" Click="Menu_SaturationDown"/>
-                                <MenuItem Header="색상 +" Click="Menu_HueUp"/>
-                                <MenuItem Header="색상 -" Click="Menu_HueDown"/>
+                            <MenuItem Header="{DynamicResource S_VideoAdjust}">
+                                <MenuItem Header="{DynamicResource S_BrightUp}" Click="Menu_BrightUp"/>
+                                <MenuItem Header="{DynamicResource S_BrightDown}" Click="Menu_BrightDown"/>
+                                <MenuItem Header="{DynamicResource S_ContrastUp}" Click="Menu_ContrastUp"/>
+                                <MenuItem Header="{DynamicResource S_ContrastDown}" Click="Menu_ContrastDown"/>
+                                <MenuItem Header="{DynamicResource S_SatUp}" Click="Menu_SaturationUp"/>
+                                <MenuItem Header="{DynamicResource S_SatDown}" Click="Menu_SaturationDown"/>
+                                <MenuItem Header="{DynamicResource S_HueUp}" Click="Menu_HueUp"/>
+                                <MenuItem Header="{DynamicResource S_HueDown}" Click="Menu_HueDown"/>
                                 <Separator/>
-                                <MenuItem Header="속성 초기화" InputGestureText="Q" Click="Menu_AdjustReset"/>
+                                <MenuItem Header="{DynamicResource S_AdjustReset}" InputGestureText="Q" Click="Menu_AdjustReset"/>
                             </MenuItem>
                         </MenuItem>
-                        <MenuItem Header="소리">
-                            <MenuItem Header="소리 크게" InputGestureText="Up" Click="Menu_VolumeUp"/>
-                            <MenuItem Header="소리 작게" InputGestureText="Down" Click="Menu_VolumeDown"/>
-                            <MenuItem x:Name="MiMute" Header="음소거" InputGestureText="M" Click="Menu_ToggleMute"/>
+                        <MenuItem Header="{DynamicResource S_MenuAudio}">
+                            <MenuItem Header="{DynamicResource S_VolumeUp}" InputGestureText="Up" Click="Menu_VolumeUp"/>
+                            <MenuItem Header="{DynamicResource S_VolumeDown}" InputGestureText="Down" Click="Menu_VolumeDown"/>
+                            <MenuItem x:Name="MiMute" Header="{DynamicResource S_Mute}" InputGestureText="M" Click="Menu_ToggleMute"/>
                             <Separator/>
-                            <MenuItem x:Name="MiAudioTracks" Header="오디오 트랙">
-                                <MenuItem Header="(없음)" IsEnabled="False"/>
+                            <MenuItem x:Name="MiAudioTracks" Header="{DynamicResource S_AudioTracks}">
+                                <MenuItem Header="{DynamicResource S_None}" IsEnabled="False"/>
                             </MenuItem>
-                            <MenuItem x:Name="MiEqualizer" Header="이퀄라이저">
-                                <MenuItem Header="(로딩)" IsEnabled="False"/>
+                            <MenuItem x:Name="MiEqualizer" Header="{DynamicResource S_Equalizer}">
+                                <MenuItem Header="{DynamicResource S_Loading}" IsEnabled="False"/>
                             </MenuItem>
                         </MenuItem>
-                        <MenuItem Header="팬 &amp; 스캔">
-                            <MenuItem Header="왼쪽으로 이동" InputGestureText="Num 4" Click="Menu_PanLeft"/>
-                            <MenuItem Header="오른쪽으로 이동" InputGestureText="Num 6" Click="Menu_PanRight"/>
-                            <MenuItem Header="위로 이동" InputGestureText="Num 8" Click="Menu_PanUp"/>
-                            <MenuItem Header="아래로 이동" InputGestureText="Num 2" Click="Menu_PanDown"/>
+                        <MenuItem Header="{DynamicResource S_PanScan}">
+                            <MenuItem Header="{DynamicResource S_PanLeft}" InputGestureText="Num 4" Click="Menu_PanLeft"/>
+                            <MenuItem Header="{DynamicResource S_PanRight}" InputGestureText="Num 6" Click="Menu_PanRight"/>
+                            <MenuItem Header="{DynamicResource S_PanUp}" InputGestureText="Num 8" Click="Menu_PanUp"/>
+                            <MenuItem Header="{DynamicResource S_PanDown}" InputGestureText="Num 2" Click="Menu_PanDown"/>
                             <Separator/>
-                            <MenuItem Header="확대" InputGestureText="Num +" Click="Menu_ZoomIn"/>
-                            <MenuItem Header="축소" InputGestureText="Num -" Click="Menu_ZoomOut"/>
-                            <MenuItem Header="위치/크기 초기화" InputGestureText="Num 5" Click="Menu_PanScanReset"/>
+                            <MenuItem Header="{DynamicResource S_ZoomIn}" InputGestureText="Num +" Click="Menu_ZoomIn"/>
+                            <MenuItem Header="{DynamicResource S_ZoomOut}" InputGestureText="Num -" Click="Menu_ZoomOut"/>
+                            <MenuItem Header="{DynamicResource S_PanScanReset}" InputGestureText="Num 5" Click="Menu_PanScanReset"/>
                         </MenuItem>
-                        <MenuItem Header="화면 비율">
-                            <MenuItem x:Name="MiAspectKeep" Header="화면 비율 유지 (권장)" Click="Menu_AspectKeep"/>
-                            <MenuItem x:Name="MiAspectOrig" Header="원본 비율" Click="Menu_AspectOriginal"/>
+                        <MenuItem Header="{DynamicResource S_MenuAspect}">
+                            <MenuItem x:Name="MiAspectKeep" Header="{DynamicResource S_AspectKeep}" Click="Menu_AspectKeep"/>
+                            <MenuItem x:Name="MiAspectOrig" Header="{DynamicResource S_AspectOrig}" Click="Menu_AspectOriginal"/>
                             <MenuItem x:Name="MiAspect43" Header="4:3" Click="Menu_Aspect43"/>
                             <MenuItem x:Name="MiAspect169" Header="16:9" Click="Menu_Aspect169"/>
                             <MenuItem x:Name="MiAspect1610" Header="16:10" Click="Menu_Aspect1610"/>
                             <MenuItem x:Name="MiAspect235" Header="2.35:1" Click="Menu_Aspect235"/>
                         </MenuItem>
-                        <MenuItem Header="화면 크기">
-                            <MenuItem Header="0.5배 크기" InputGestureText="1" Click="Menu_Size05"/>
-                            <MenuItem Header="1.0배 크기" InputGestureText="2" Click="Menu_Size10"/>
-                            <MenuItem Header="1.5배 크기" InputGestureText="3" Click="Menu_Size15"/>
-                            <MenuItem Header="2.0배 크기" InputGestureText="4" Click="Menu_Size20"/>
+                        <MenuItem Header="{DynamicResource S_MenuSize}">
+                            <MenuItem Header="{DynamicResource S_Size05}" InputGestureText="1" Click="Menu_Size05"/>
+                            <MenuItem Header="{DynamicResource S_Size10}" InputGestureText="2" Click="Menu_Size10"/>
+                            <MenuItem Header="{DynamicResource S_Size15}" InputGestureText="3" Click="Menu_Size15"/>
+                            <MenuItem Header="{DynamicResource S_Size20}" InputGestureText="4" Click="Menu_Size20"/>
                             <Separator/>
-                            <MenuItem x:Name="MiFullscreen" Header="전체 화면" InputGestureText="Alt+Enter" Click="Menu_Fullscreen"/>
-                            <MenuItem Header="꽉찬 화면" InputGestureText="Ctrl+Enter" Click="Menu_Maximize"/>
+                            <MenuItem x:Name="MiFullscreen" Header="{DynamicResource S_Fullscreen}" InputGestureText="Alt+Enter" Click="Menu_Fullscreen"/>
+                            <MenuItem Header="{DynamicResource S_Maximize}" InputGestureText="Ctrl+Enter" Click="Menu_Maximize"/>
                         </MenuItem>
                         <Separator/>
-                        <MenuItem Header="환경 설정..." InputGestureText="F5" Click="Menu_Settings"/>
-                        <MenuItem x:Name="MiPlaylist" Header="재생목록" InputGestureText="F6" Click="Menu_TogglePlaylist"/>
-                        <MenuItem Header="제어창..." InputGestureText="F7" Click="Menu_Controller"/>
+                        <MenuItem Header="{DynamicResource S_Settings}" InputGestureText="F5" Click="Menu_Settings"/>
+                        <MenuItem x:Name="MiPlaylist" Header="{DynamicResource S_Playlist}" InputGestureText="F6" Click="Menu_TogglePlaylist"/>
+                        <MenuItem Header="{DynamicResource S_Controller}" InputGestureText="F7" Click="Menu_Controller"/>
                         <Separator/>
-                        <MenuItem Header="재생 정보..." InputGestureText="Ctrl+F1" Click="Menu_MediaInfo"/>
-                        <MenuItem Header="프로그램 정보..." InputGestureText="F1" Click="Menu_About"/>
+                        <MenuItem Header="{DynamicResource S_MediaInfo}" InputGestureText="Ctrl+F1" Click="Menu_MediaInfo"/>
+                        <MenuItem Header="{DynamicResource S_About}" InputGestureText="F1" Click="Menu_About"/>
                         <Separator/>
-                        <MenuItem Header="종료" InputGestureText="Alt+F4" Click="Caption_Close"/>
+                        <MenuItem Header="{DynamicResource S_Exit}" InputGestureText="Alt+F4" Click="Caption_Close"/>
                     </ContextMenu>
                 </Grid.ContextMenu>
 
@@ -234,10 +234,10 @@
 
                     <DockPanel Grid.Row="0" Margin="10,8">
                         <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Padding="6,2"
-                                Content="✕" Click="Menu_TogglePlaylist" ToolTip="재생목록 닫기 (F6)"/>
+                                Content="✕" Click="Menu_TogglePlaylist" ToolTip="{DynamicResource S_TipClosePlaylist}"/>
                         <Button x:Name="ViewModeButton" DockPanel.Dock="Right" Style="{StaticResource IconButton}"
-                                Padding="6,2" Content="▤" Click="ViewModeButton_Click" ToolTip="보기 방식 전환"/>
-                        <TextBlock Text="재생목록" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                Padding="6,2" Content="▤" Click="ViewModeButton_Click" ToolTip="{DynamicResource S_TipViewMode}"/>
+                        <TextBlock Text="{DynamicResource S_Playlist}" FontWeight="SemiBold" VerticalAlignment="Center"/>
                     </DockPanel>
 
                     <ListBox x:Name="PlaylistList" Grid.Row="1" Background="Transparent" BorderThickness="0"
@@ -248,12 +248,12 @@
                              RequestBringIntoView="PlaylistList_RequestBringIntoView">
                         <ListBox.ContextMenu>
                             <ContextMenu x:Name="PlaylistMenu" Opened="PlaylistMenu_Opened">
-                                <MenuItem x:Name="MiPlRemove" Header="재생목록에서 제거" Click="PlaylistMenu_Remove"/>
-                                <MenuItem x:Name="MiPlDelete" Header="파일 삭제..." Click="PlaylistMenu_Delete"/>
+                                <MenuItem x:Name="MiPlRemove" Header="{DynamicResource S_PlRemove}" Click="PlaylistMenu_Remove"/>
+                                <MenuItem x:Name="MiPlDelete" Header="{DynamicResource S_PlDelete}" Click="PlaylistMenu_Delete"/>
                                 <Separator/>
-                                <MenuItem Header="보기 방식">
-                                    <MenuItem x:Name="MiPlViewTitles" Header="제목 목록" Click="PlaylistMenu_ViewTitles"/>
-                                    <MenuItem x:Name="MiPlViewThumbs" Header="미리보기" Click="PlaylistMenu_ViewThumbs"/>
+                                <MenuItem Header="{DynamicResource S_PlViewMode}">
+                                    <MenuItem x:Name="MiPlViewTitles" Header="{DynamicResource S_PlViewTitles}" Click="PlaylistMenu_ViewTitles"/>
+                                    <MenuItem x:Name="MiPlViewThumbs" Header="{DynamicResource S_PlViewThumbs}" Click="PlaylistMenu_ViewThumbs"/>
                                 </MenuItem>
                             </ContextMenu>
                         </ListBox.ContextMenu>
@@ -277,11 +277,11 @@
                         Background="{StaticResource OverlayBarBrush}" Visibility="Collapsed">
                     <DockPanel VerticalAlignment="Center" Margin="14,0,8,0">
                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                            <Button Style="{StaticResource CaptionButton}" Content="❐" ToolTip="창 모드 (Esc)"
+                            <Button Style="{StaticResource CaptionButton}" Content="❐" ToolTip="{DynamicResource S_TipWindowed}"
                                     Click="Menu_Fullscreen"/>
-                            <Button Style="{StaticResource CaptionButton}" Content="─" ToolTip="최소화"
+                            <Button Style="{StaticResource CaptionButton}" Content="─" ToolTip="{DynamicResource S_TipMinimize}"
                                     Click="Caption_Minimize"/>
-                            <Button Style="{StaticResource CaptionButton}" Content="✕" ToolTip="닫기"
+                            <Button Style="{StaticResource CaptionButton}" Content="✕" ToolTip="{DynamicResource S_Close}"
                                     Click="Caption_Close"/>
                         </StackPanel>
                         <TextBlock x:Name="TopOverlayTitle" Text="OctoPlayer" VerticalAlignment="Center"
@@ -294,41 +294,51 @@
                     <StackPanel>
                         <DockPanel Margin="0,0,0,4">
                             <TextBlock x:Name="CurrentTimeText" Text="00:00:00" DockPanel.Dock="Left"
-                                       VerticalAlignment="Center" Margin="0,0,10,0" FontSize="12"/>
+                                       VerticalAlignment="Bottom" Margin="0,0,10,2" FontSize="12"/>
                             <TextBlock x:Name="TotalTimeText" Text="00:00:00" DockPanel.Dock="Right"
-                                       VerticalAlignment="Center" Margin="10,0,0,0" FontSize="12"
+                                       VerticalAlignment="Bottom" Margin="10,0,0,2" FontSize="12"
                                        Foreground="{StaticResource TextDimBrush}"/>
-                            <Slider x:Name="SeekSlider" Style="{StaticResource MediaSlider}" Maximum="1000"
-                                    PreviewMouseDown="SeekSlider_PreviewMouseDown"
-                                    PreviewMouseUp="SeekSlider_PreviewMouseUp"
-                                    ValueChanged="SeekSlider_ValueChanged"/>
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="10"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <!-- 챕터(체크포인트) 마커: 코드에서 챕터 위치마다 ▼ 화살표를 그립니다. -->
+                                <Canvas x:Name="ChapterMarkerCanvas" Grid.Row="0" Height="10"
+                                        ClipToBounds="False" Background="Transparent"
+                                        SizeChanged="ChapterMarkerCanvas_SizeChanged"/>
+                                <Slider x:Name="SeekSlider" Grid.Row="1" Style="{StaticResource MediaSlider}" Maximum="1000"
+                                        PreviewMouseDown="SeekSlider_PreviewMouseDown"
+                                        PreviewMouseUp="SeekSlider_PreviewMouseUp"
+                                        ValueChanged="SeekSlider_ValueChanged"/>
+                            </Grid>
                         </DockPanel>
                         <DockPanel>
                             <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
-                                <Button Style="{StaticResource IconButton}" Content="열기" Click="Menu_OpenFile"
+                                <Button Style="{StaticResource IconButton}" Content="{DynamicResource S_Open}" Click="Menu_OpenFile"
                                         VerticalAlignment="Center"/>
-                                <Button Style="{StaticResource TransportButton}" Click="Menu_PrevFile" ToolTip="이전 파일 (PgUp)">
+                                <Button Style="{StaticResource TransportButton}" Click="Menu_PrevFile" ToolTip="{DynamicResource S_TipPrev}">
                                     <Path Data="{StaticResource IconPrev}" Fill="{StaticResource TextBrush}"
                                           Width="13" Height="13" Stretch="Uniform"/>
                                 </Button>
                                 <Button x:Name="PlayPauseButton" Style="{StaticResource PlayButton}"
-                                        Click="Menu_PlayPause" ToolTip="재생/일시 중지 (Space)">
+                                        Click="Menu_PlayPause" ToolTip="{DynamicResource S_TipPlayPause}">
                                     <Path x:Name="PlayPauseIcon" Data="{StaticResource IconPlay}" Fill="White"
                                           Width="15" Height="15" Stretch="Uniform" Margin="3,0,0,0"/>
                                 </Button>
-                                <Button Style="{StaticResource TransportButton}" Click="Stop_Click" ToolTip="정지">
+                                <Button Style="{StaticResource TransportButton}" Click="Stop_Click" ToolTip="{DynamicResource S_TipStop}">
                                     <Path Data="{StaticResource IconStop}" Fill="{StaticResource TextBrush}"
                                           Width="12" Height="12" Stretch="Uniform"/>
                                 </Button>
-                                <Button Style="{StaticResource TransportButton}" Click="Menu_NextFile" ToolTip="다음 파일 (PgDn)">
+                                <Button Style="{StaticResource TransportButton}" Click="Menu_NextFile" ToolTip="{DynamicResource S_TipNext}">
                                     <Path Data="{StaticResource IconNext}" Fill="{StaticResource TextBrush}"
                                           Width="13" Height="13" Stretch="Uniform"/>
                                 </Button>
                                 <Border Width="1" Background="{StaticResource BorderBrush}" Margin="8,6"/>
-                                <Button x:Name="ShuffleButton" Style="{StaticResource IconButton}" Content="셔플" Click="Menu_ToggleShuffle"/>
-                                <Button x:Name="RepeatButton" Style="{StaticResource IconButton}" Content="반복: 없음" Click="Menu_CycleRepeat"/>
+                                <Button x:Name="ShuffleButton" Style="{StaticResource IconButton}" Content="{DynamicResource S_BtnShuffle}" Click="Menu_ToggleShuffle"/>
+                                <Button x:Name="RepeatButton" Style="{StaticResource IconButton}" Content="{DynamicResource S_RepeatNone}" Click="Menu_CycleRepeat"/>
                                 <Button x:Name="RepeatCountButton" Style="{StaticResource IconButton}" Content="×1"
-                                        ToolTip="반복 횟수" Click="RepeatCount_Click"/>
+                                        ToolTip="{DynamicResource S_TipRepeatCount}" Click="RepeatCount_Click"/>
                                 <TextBlock x:Name="RateText" Text="1x" VerticalAlignment="Center" Margin="10,0,0,0"
                                            Foreground="{StaticResource TextDimBrush}" FontSize="12"/>
                             </StackPanel>
@@ -340,9 +350,11 @@
                                         ValueChanged="VolumeSlider_ValueChanged"
                                         PreviewMouseUp="VolumeSlider_PreviewMouseUp"/>
                                 <Border Width="1" Background="{StaticResource BorderBrush}" Margin="8,6"/>
-                                <Button Style="{StaticResource IconButton}" Content="↻ 회전" Click="Menu_Rotate"/>
-                                <Button Style="{StaticResource IconButton}" Content="전체화면" Click="Menu_Fullscreen"/>
-                                <Button x:Name="PlaylistToggleButton" Style="{StaticResource IconButton}" Content="재생목록" Click="Menu_TogglePlaylist"/>
+                                <Button x:Name="SubtitleButton" Style="{StaticResource IconButton}" Content="{DynamicResource S_BtnSubtitles}"
+                                        ToolTip="{DynamicResource S_TipSubtitles}" Click="SubtitleButton_Click"/>
+                                <Button Style="{StaticResource IconButton}" Content="{DynamicResource S_BtnRotate}" Click="Menu_Rotate"/>
+                                <Button Style="{StaticResource IconButton}" Content="{DynamicResource S_BtnFullscreen}" Click="Menu_Fullscreen"/>
+                                <Button x:Name="PlaylistToggleButton" Style="{StaticResource IconButton}" Content="{DynamicResource S_Playlist}" Click="Menu_TogglePlaylist"/>
                             </StackPanel>
                             <Border/>
                         </DockPanel>

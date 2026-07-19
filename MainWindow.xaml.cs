@@ -95,6 +95,9 @@ namespace OctoPlayer
         private PlaylistViewMode _playlistView = PlaylistViewMode.Titles;
         private readonly HashSet<string> _attachedSubtitles = new(StringComparer.OrdinalIgnoreCase);
 
+        // 챕터(체크포인트) 마커: 재생 시작 시 백그라운드에서 읽어 시크바 위에 ▼로 표시합니다.
+        private ChapterDescription[] _chapters = Array.Empty<ChapterDescription>();
+
         private readonly DispatcherTimer _uiTimer = new() { Interval = TimeSpan.FromMilliseconds(400) };
         private readonly DispatcherTimer _toastTimer = new() { Interval = TimeSpan.FromSeconds(1.8) };
         private readonly DispatcherTimer _idleTimer = new() { Interval = TimeSpan.FromSeconds(2.5) };
@@ -115,6 +118,10 @@ namespace OctoPlayer
         public MainWindow(string[] args)
         {
             _startupArgs = args ?? Array.Empty<string>();
+
+            // 언어 적용은 XAML 로드(DynamicResource 평가) 전에 수행합니다.
+            Loc.Apply(_settings.Language);
+
             InitializeComponent();
 
             _thumbnails = new ThumbnailCache(96, 54, OnThumbnailReady);
@@ -149,6 +156,9 @@ namespace OctoPlayer
             UpdateRateText();
             _idleTimer.Start();
             _loaded = true;
+
+            // 이전 버전이 삭제된 뒤에도 레지스트리에 남은 "죽은 연결 등록"을 현재 경로로 복구합니다.
+            _ = Task.Run(FileAssociations.RepairIfStale);
 
             if (_startupArgs.Length > 0)
             {
@@ -196,7 +206,7 @@ namespace OctoPlayer
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, $"미디어 엔진 초기화에 실패했습니다.\n{ex.Message}",
+                MessageBox.Show(this, Loc.F("S_InitFail", ex.Message),
                     "OctoPlayer", MessageBoxButton.OK, MessageBoxImage.Error);
                 Close();
             }
@@ -298,8 +308,11 @@ namespace OctoPlayer
         private void Player_TimeChanged(object? sender, MediaPlayerTimeChangedEventArgs e) =>
             Volatile.Write(ref _cachedTimeMs, e.Time);
 
-        private void Player_LengthChanged(object? sender, MediaPlayerLengthChangedEventArgs e) =>
+        private void Player_LengthChanged(object? sender, MediaPlayerLengthChangedEventArgs e)
+        {
             Volatile.Write(ref _cachedLengthMs, e.Length);
+            RunOnUi(RenderChapterMarkers); // 길이를 알아야 챕터 위치를 배치할 수 있음
+        }
 
         private void Player_PositionChanged(object? sender, MediaPlayerPositionChangedEventArgs e) =>
             _cachedPosition = e.Position;
@@ -436,7 +449,7 @@ namespace OctoPlayer
         {
             var dialog = new Microsoft.Win32.OpenFileDialog
             {
-                Title = "미디어 파일 열기",
+                Title = Loc.T("S_OpenMediaTitle"),
                 Multiselect = true,
                 Filter = SupportedFormats.BuildOpenFileFilter()
             };
@@ -448,7 +461,7 @@ namespace OctoPlayer
 
         private void Menu_OpenFolder(object? sender, RoutedEventArgs e)
         {
-            var dialog = new Microsoft.Win32.OpenFolderDialog { Title = "재생할 폴더 선택" };
+            var dialog = new Microsoft.Win32.OpenFolderDialog { Title = Loc.T("S_SelectFolderTitle") };
             if (dialog.ShowDialog(this) == true)
             {
                 OpenPaths(new[] { dialog.FolderName }, autoScanFolder: false);
@@ -457,7 +470,7 @@ namespace OctoPlayer
 
         private void Menu_OpenUrl(object? sender, RoutedEventArgs e)
         {
-            string? url = PromptWindow.Show(this, "주소 열기", "재생할 주소(URL)를 입력하세요:");
+            string? url = PromptWindow.Show(this, Loc.T("S_OpenUrlTitle"), Loc.T("S_OpenUrlLabel"));
             if (string.IsNullOrWhiteSpace(url))
             {
                 return;
@@ -476,8 +489,10 @@ namespace OctoPlayer
             StopPlaybackInternal();
             _currentMedia?.Dispose();
             _currentMedia = null;
+            _chapters = Array.Empty<ChapterDescription>();
+            ChapterMarkerCanvas.Children.Clear();
             SetTitle(null);
-            ShowToast("닫기");
+            ShowToast(Loc.T("S_Close"));
         }
 
         private async void OpenPaths(IEnumerable<string> paths, bool autoScanFolder)
@@ -607,7 +622,7 @@ namespace OctoPlayer
             {
                 startTimeMs = Math.Max(0, _settings.LastPositionMs - 2000);
                 _settings.LastFilePath = null;
-                ShowToast($"이어보기: {FormatTime(startTimeMs)}");
+                ShowToast(Loc.F("S_ResumeToast", FormatTime(startTimeMs)));
             }
 
             // 새 미디어 기준으로 상태 캐시를 초기화합니다(이전 트랙 값이 남지 않도록).
@@ -618,6 +633,8 @@ namespace OctoPlayer
             _cachedPosition = 0f;
             _cachedSeekable = false;
             _pendingSeekMs = -1;
+            _chapters = Array.Empty<ChapterDescription>();
+            ChapterMarkerCanvas.Children.Clear();
 
             // 백그라운드 작업으로 넘길 값들을 UI 스레드에서 미리 복사합니다.
             bool loopForever = _mediaRepeatsForever;
@@ -804,8 +821,97 @@ namespace OctoPlayer
                 }
 
                 UpdatePlayPauseButton();
+                UpdateSubtitleButton();
+                LoadChaptersAsync();
             });
         }
+
+        /// <summary>
+        /// 현재 미디어의 챕터 목록을 백그라운드에서 읽어 시크바 위 마커로 표시합니다.
+        /// 재생 시작 직후에는 챕터 정보가 아직 준비되지 않았을 수 있어 잠시 후 한 번 더 시도합니다.
+        /// </summary>
+        private void LoadChaptersAsync()
+        {
+            int version = _playbackVersion;
+            MediaPlayer mp = _mediaPlayer;
+            _ = Task.Run(async () =>
+            {
+                ChapterDescription[] chapters = Array.Empty<ChapterDescription>();
+                try
+                {
+                    chapters = mp.FullChapterDescriptions(-1) ?? Array.Empty<ChapterDescription>();
+                    if (chapters.Length == 0)
+                    {
+                        await Task.Delay(1500);
+                        if (Volatile.Read(ref _playbackVersion) != version)
+                        {
+                            return;
+                        }
+                        chapters = mp.FullChapterDescriptions(-1) ?? Array.Empty<ChapterDescription>();
+                    }
+                }
+                catch
+                {
+                    // 챕터 조회 실패 시 마커만 표시되지 않습니다.
+                }
+
+                ChapterDescription[] result = chapters;
+                RunOnUi(() =>
+                {
+                    if (version != _playbackVersion)
+                    {
+                        return;
+                    }
+                    _chapters = result;
+                    RenderChapterMarkers();
+                });
+            });
+        }
+
+        /// <summary>시크바 위 캔버스에 챕터 위치마다 ▼ 화살표 마커를 그립니다(클릭 시 해당 지점으로 이동).</summary>
+        private void RenderChapterMarkers()
+        {
+            ChapterMarkerCanvas.Children.Clear();
+
+            long len = Volatile.Read(ref _cachedLengthMs);
+            double width = ChapterMarkerCanvas.ActualWidth;
+            if (len <= 0 || width <= 0 || _chapters.Length == 0)
+            {
+                return;
+            }
+
+            for (int i = 0; i < _chapters.Length; i++)
+            {
+                ChapterDescription chapter = _chapters[i];
+                long timeMs = chapter.TimeOffset;
+                if (timeMs <= 500)
+                {
+                    continue; // 0초 시작 챕터는 표시할 의미가 없습니다.
+                }
+
+                double x = Math.Clamp(timeMs / (double)len, 0, 1) * width;
+                string name = string.IsNullOrWhiteSpace(chapter.Name) ? Loc.F("S_Chapter", i + 1) : chapter.Name!;
+
+                var marker = new System.Windows.Shapes.Polygon
+                {
+                    Points = new PointCollection { new Point(0, 0), new Point(8, 0), new Point(4, 6) },
+                    Fill = (Brush)FindResource("AccentBrush"),
+                    Cursor = Cursors.Hand,
+                    ToolTip = $"{name}  ({FormatTime(timeMs)})"
+                };
+                long targetMs = timeMs;
+                marker.MouseLeftButtonDown += (_, args) =>
+                {
+                    ApplySeek(targetMs);
+                    args.Handled = true;
+                };
+                Canvas.SetLeft(marker, x - 4);
+                Canvas.SetTop(marker, 2);
+                ChapterMarkerCanvas.Children.Add(marker);
+            }
+        }
+
+        private void ChapterMarkerCanvas_SizeChanged(object sender, SizeChangedEventArgs e) => RenderChapterMarkers();
 
         /// <summary>한 곡 반복 또는 (전체 반복 + 단일 항목)처럼 같은 파일을 무한 반복해야 하는 상태인지.</summary>
         private bool WantsInfiniteLoop() =>
@@ -922,7 +1028,7 @@ namespace OctoPlayer
             _playbackRate = MathF.Round(clamped * 100f) / 100f;
             _mediaPlayer.SetRate(_playbackRate);
             UpdateRateText();
-            ShowToast($"재생 속도 {_playbackRate:0.##}x");
+            ShowToast(Loc.F("S_SpeedToast", $"{_playbackRate:0.##}"));
         }
 
         private void ChangePlaybackRate(float delta) => SetPlaybackRate(_playbackRate + delta);
@@ -944,7 +1050,7 @@ namespace OctoPlayer
             {
                 _abEndMs = -1;
             }
-            ShowToast($"구간 반복 A 지점: {FormatTime(_abStartMs)}");
+            ShowToast(Loc.F("S_AbAToast", FormatTime(_abStartMs)));
         }
 
         private void Menu_AbSetB(object? sender, RoutedEventArgs e)
@@ -952,17 +1058,17 @@ namespace OctoPlayer
             long now = Volatile.Read(ref _cachedTimeMs);
             if (_abStartMs < 0 || now <= _abStartMs)
             {
-                ShowToast("먼저 A 지점을 지정하세요");
+                ShowToast(Loc.T("S_AbNeedA"));
                 return;
             }
             _abEndMs = now;
-            ShowToast($"구간 반복 {FormatTime(_abStartMs)} ~ {FormatTime(_abEndMs)}");
+            ShowToast(Loc.F("S_AbRangeToast", FormatTime(_abStartMs), FormatTime(_abEndMs)));
         }
 
         private void Menu_AbClear(object? sender, RoutedEventArgs e)
         {
             _abStartMs = _abEndMs = -1;
-            ShowToast("구간 반복 해제");
+            ShowToast(Loc.T("S_AbClear"));
         }
 
         private void Menu_CycleRepeat(object? sender, RoutedEventArgs e)
@@ -983,7 +1089,7 @@ namespace OctoPlayer
             _playlist.SetShuffle(!_playlist.IsShuffled);
             UpdateShuffleButton();
             SaveSettings();
-            ShowToast(_playlist.IsShuffled ? "셔플 켬" : "셔플 끔");
+            ShowToast(_playlist.IsShuffled ? Loc.T("S_ShuffleOn") : Loc.T("S_ShuffleOff"));
         }
 
         private void RepeatCount_Click(object? sender, RoutedEventArgs e)
@@ -992,7 +1098,7 @@ namespace OctoPlayer
             _repeatCount = RepeatCountCycle[(idx + 1) % RepeatCountCycle.Length];
             RepeatCountButton.Content = $"×{_repeatCount}";
             SaveSettings();
-            ShowToast($"파일 반복 횟수: {_repeatCount}회");
+            ShowToast(Loc.F("S_RepeatCountToast", _repeatCount));
         }
 
         // =====================================================================
@@ -1050,8 +1156,8 @@ namespace OctoPlayer
             string mask = string.Join(";", SubtitleFiles.Extensions.Select(x => "*" + x));
             var dialog = new Microsoft.Win32.OpenFileDialog
             {
-                Title = "자막 파일 열기",
-                Filter = $"자막 파일|{mask}|모든 파일|*.*"
+                Title = Loc.T("S_OpenSubTitle"),
+                Filter = $"{Loc.T("S_SubFilter")}|{mask}|{Loc.T("S_AllFiles")}|*.*"
             };
             if (dialog.ShowDialog(this) != true)
             {
@@ -1074,13 +1180,25 @@ namespace OctoPlayer
             }
         }
 
+        private void SubtitleButton_Click(object? sender, RoutedEventArgs e) =>
+            Menu_ToggleSubtitles(null, new RoutedEventArgs());
+
+        /// <summary>하단 컨트롤바 자막 버튼 강조: 자막 트랙이 켜져 있으면 강조 배경.</summary>
+        private void UpdateSubtitleButton()
+        {
+            bool on = _mediaPlayer != null && _mediaPlayer.Spu != -1;
+            SubtitleButton.Background = on
+                ? (Brush)FindResource("AccentSoftBrush")
+                : Brushes.Transparent;
+        }
+
         private void Menu_ToggleSubtitles(object? sender, RoutedEventArgs e)
         {
             if (_mediaPlayer.Spu != -1)
             {
                 _lastSpu = _mediaPlayer.Spu;
                 _mediaPlayer.SetSpu(-1);
-                ShowToast("자막 숨김");
+                ShowToast(Loc.T("S_SubHidden"));
             }
             else
             {
@@ -1098,8 +1216,10 @@ namespace OctoPlayer
                 {
                     SelectFirstSubtitleTrack();
                 }
-                ShowToast(_mediaPlayer.Spu != -1 ? "자막 표시" : "표시할 자막 없음");
+                ShowToast(_mediaPlayer.Spu != -1 ? Loc.T("S_SubShown") : Loc.T("S_SubNone"));
             }
+
+            UpdateSubtitleButton();
         }
 
         private void SelectFirstSubtitleTrack()
@@ -1120,14 +1240,14 @@ namespace OctoPlayer
         private void Menu_SubDelayReset(object? sender, RoutedEventArgs e)
         {
             _mediaPlayer.SetSpuDelay(0);
-            ShowToast("자막 싱크 초기화");
+            ShowToast(Loc.T("S_SubSyncResetToast"));
         }
 
         private void ChangeSubDelay(long deltaMicroseconds)
         {
             long delay = _mediaPlayer.SpuDelay + deltaMicroseconds;
             _mediaPlayer.SetSpuDelay(delay);
-            ShowToast($"자막 싱크 {delay / 1_000_000.0:+0.0;-0.0;0}초");
+            ShowToast(Loc.F("S_SubDelayToast", $"{delay / 1_000_000.0:+0.0;-0.0;0}"));
         }
 
         // =====================================================================
@@ -1138,7 +1258,7 @@ namespace OctoPlayer
         {
             if (_currentMedia == null)
             {
-                ShowToast("재생 중인 영상이 없습니다");
+                ShowToast(Loc.T("S_NoVideo"));
                 return;
             }
 
@@ -1155,10 +1275,11 @@ namespace OctoPlayer
                 dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "OctoPlayer");
                 Directory.CreateDirectory(dir);
             }
-            string path = Path.Combine(dir, $"캡처_{DateTime.Now:yyyyMMdd_HHmmss}.png");
+            string prefix = Loc.Current == "en" ? "Capture" : "캡처";
+            string path = Path.Combine(dir, $"{prefix}_{DateTime.Now:yyyyMMdd_HHmmss}.png");
 
             bool ok = _mediaPlayer.TakeSnapshot(0, path, 0, 0);
-            ShowToast(ok ? $"캡처 저장: {path}" : "캡처 실패");
+            ShowToast(ok ? Loc.F("S_CaptureSaved", path) : Loc.T("S_CaptureFail"));
         }
 
         private void Menu_Rotate(object? sender, RoutedEventArgs e) => RotateVideo();
@@ -1173,17 +1294,17 @@ namespace OctoPlayer
             long resumeAt = Volatile.Read(ref _cachedTimeMs);
             _rotation = (_rotation + 90) % 360;
             StartPlayback(resumeAt);
-            ShowToast($"화면 회전 {_rotation}°");
+            ShowToast(Loc.F("S_RotateToast", _rotation));
         }
 
-        private void Menu_BrightUp(object? sender, RoutedEventArgs e) => AdjustVideo(ref _brightness, +0.1f, 0f, 2f, "명도");
-        private void Menu_BrightDown(object? sender, RoutedEventArgs e) => AdjustVideo(ref _brightness, -0.1f, 0f, 2f, "명도");
-        private void Menu_ContrastUp(object? sender, RoutedEventArgs e) => AdjustVideo(ref _contrast, +0.1f, 0f, 2f, "대비");
-        private void Menu_ContrastDown(object? sender, RoutedEventArgs e) => AdjustVideo(ref _contrast, -0.1f, 0f, 2f, "대비");
-        private void Menu_SaturationUp(object? sender, RoutedEventArgs e) => AdjustVideo(ref _saturation, +0.1f, 0f, 3f, "채도");
-        private void Menu_SaturationDown(object? sender, RoutedEventArgs e) => AdjustVideo(ref _saturation, -0.1f, 0f, 3f, "채도");
-        private void Menu_HueUp(object? sender, RoutedEventArgs e) => AdjustVideo(ref _hue, +10f, -180f, 180f, "색상");
-        private void Menu_HueDown(object? sender, RoutedEventArgs e) => AdjustVideo(ref _hue, -10f, -180f, 180f, "색상");
+        private void Menu_BrightUp(object? sender, RoutedEventArgs e) => AdjustVideo(ref _brightness, +0.1f, 0f, 2f, Loc.T("S_Brightness"));
+        private void Menu_BrightDown(object? sender, RoutedEventArgs e) => AdjustVideo(ref _brightness, -0.1f, 0f, 2f, Loc.T("S_Brightness"));
+        private void Menu_ContrastUp(object? sender, RoutedEventArgs e) => AdjustVideo(ref _contrast, +0.1f, 0f, 2f, Loc.T("S_Contrast"));
+        private void Menu_ContrastDown(object? sender, RoutedEventArgs e) => AdjustVideo(ref _contrast, -0.1f, 0f, 2f, Loc.T("S_Contrast"));
+        private void Menu_SaturationUp(object? sender, RoutedEventArgs e) => AdjustVideo(ref _saturation, +0.1f, 0f, 3f, Loc.T("S_Saturation"));
+        private void Menu_SaturationDown(object? sender, RoutedEventArgs e) => AdjustVideo(ref _saturation, -0.1f, 0f, 3f, Loc.T("S_Saturation"));
+        private void Menu_HueUp(object? sender, RoutedEventArgs e) => AdjustVideo(ref _hue, +10f, -180f, 180f, Loc.T("S_Hue"));
+        private void Menu_HueDown(object? sender, RoutedEventArgs e) => AdjustVideo(ref _hue, -10f, -180f, 180f, Loc.T("S_Hue"));
 
         private void AdjustVideo(ref float field, float delta, float min, float max, string label)
         {
@@ -1197,7 +1318,7 @@ namespace OctoPlayer
             _brightness = _contrast = _saturation = 1f;
             _hue = 0f;
             ReapplyVideoAdjust();
-            ShowToast("영상 속성 초기화");
+            ShowToast(Loc.T("S_AdjustResetToast"));
         }
 
         private void ReapplyVideoAdjust()
@@ -1229,7 +1350,7 @@ namespace OctoPlayer
             double value = Math.Clamp(VolumeSlider.Value + delta, 0, 100);
             VolumeSlider.Value = value; // ValueChanged에서 적용/표시
             SaveSettings();
-            ShowToast($"볼륨 {(int)value}");
+            ShowToast(Loc.F("S_VolumeToast", (int)value));
         }
 
         private void Menu_ToggleMute(object? sender, RoutedEventArgs e) => ToggleMute();
@@ -1239,7 +1360,7 @@ namespace OctoPlayer
             _isMuted = !_isMuted;
             _mediaPlayer.Mute = _isMuted;
             UpdateVolumeText();
-            ShowToast(_isMuted ? "음소거" : "음소거 해제");
+            ShowToast(_isMuted ? Loc.T("S_Muted") : Loc.T("S_Unmuted"));
         }
 
         private void VolumeText_Click(object? sender, MouseButtonEventArgs e) => ToggleMute();
@@ -1265,7 +1386,7 @@ namespace OctoPlayer
 
         private void UpdateVolumeText()
         {
-            VolumeText.Text = _isMuted ? "음소거" : ((int)VolumeSlider.Value).ToString();
+            VolumeText.Text = _isMuted ? Loc.T("S_Muted") : ((int)VolumeSlider.Value).ToString();
             VolumeText.Foreground = _isMuted
                 ? (Brush)FindResource("AccentBrush")
                 : (Brush)FindResource("TextBrush");
@@ -1275,7 +1396,7 @@ namespace OctoPlayer
         {
             MiEqualizer.Items.Clear();
 
-            var off = new MenuItem { Header = "끄기", IsChecked = _eqPreset < 0 };
+            var off = new MenuItem { Header = Loc.T("S_EqOff"), IsChecked = _eqPreset < 0 };
             off.Click += (_, _) => SetEqualizerPreset(-1);
             MiEqualizer.Items.Add(off);
             MiEqualizer.Items.Add(new Separator());
@@ -1302,7 +1423,7 @@ namespace OctoPlayer
             {
                 _mediaPlayer.UnsetEqualizer();
                 _eqPreset = -1;
-                ShowToast("이퀄라이저 끔");
+                ShowToast(Loc.T("S_EqOffToast"));
             }
             else
             {
@@ -1310,7 +1431,7 @@ namespace OctoPlayer
                 _mediaPlayer.SetEqualizer(eq);
                 _eqLastPreset = preset;
                 _eqPreset = preset;
-                ShowToast($"이퀄라이저: {eq.PresetName((uint)preset)}");
+                ShowToast(Loc.F("S_EqToast", eq.PresetName((uint)preset) ?? preset.ToString()));
             }
         }
 
@@ -1330,7 +1451,7 @@ namespace OctoPlayer
                 }
 
                 any = true;
-                var item = new MenuItem { Header = track.Name ?? $"트랙 {track.Id}", IsChecked = track.Id == current };
+                var item = new MenuItem { Header = track.Name ?? Loc.F("S_Track", track.Id), IsChecked = track.Id == current };
                 int id = track.Id;
                 item.Click += (_, _) => _mediaPlayer.SetAudioTrack(id);
                 MiAudioTracks.Items.Add(item);
@@ -1338,7 +1459,7 @@ namespace OctoPlayer
 
             if (!any)
             {
-                MiAudioTracks.Items.Add(new MenuItem { Header = "(재생 중인 오디오 없음)", IsEnabled = false });
+                MiAudioTracks.Items.Add(new MenuItem { Header = Loc.T("S_NoAudio"), IsEnabled = false });
             }
         }
 
@@ -1347,8 +1468,8 @@ namespace OctoPlayer
             MiSubTracks.Items.Clear();
             int current = _mediaPlayer.Spu;
 
-            var off = new MenuItem { Header = "자막 끄기", IsChecked = current == -1 };
-            off.Click += (_, _) => _mediaPlayer.SetSpu(-1);
+            var off = new MenuItem { Header = Loc.T("S_SubOff"), IsChecked = current == -1 };
+            off.Click += (_, _) => { _mediaPlayer.SetSpu(-1); UpdateSubtitleButton(); };
             MiSubTracks.Items.Add(off);
 
             foreach (TrackDescription track in _mediaPlayer.SpuDescription)
@@ -1358,9 +1479,9 @@ namespace OctoPlayer
                     continue;
                 }
 
-                var item = new MenuItem { Header = track.Name ?? $"트랙 {track.Id}", IsChecked = track.Id == current };
+                var item = new MenuItem { Header = track.Name ?? Loc.F("S_Track", track.Id), IsChecked = track.Id == current };
                 int id = track.Id;
-                item.Click += (_, _) => _mediaPlayer.SetSpu(id);
+                item.Click += (_, _) => { _mediaPlayer.SetSpu(id); UpdateSubtitleButton(); };
                 MiSubTracks.Items.Add(item);
             }
         }
@@ -1381,14 +1502,14 @@ namespace OctoPlayer
             _zoom = 1f;
             _panX = _panY = 0;
             ApplyPanScan();
-            ShowToast("팬 & 스캔 초기화");
+            ShowToast(Loc.T("S_PanScanResetToast"));
         }
 
         private void Pan(int dx, int dy)
         {
             if (_zoom <= 1f)
             {
-                ShowToast("먼저 확대(Num +)하세요");
+                ShowToast(Loc.T("S_ZoomFirst"));
                 return;
             }
 
@@ -1401,14 +1522,14 @@ namespace OctoPlayer
             _panX += dx * (int)(w / 20);
             _panY += dy * (int)(h / 20);
             ApplyPanScan();
-            ShowToast($"이동 X{_panX} Y{_panY}");
+            ShowToast(Loc.F("S_PanToast", _panX, _panY));
         }
 
         private void Zoom(float delta)
         {
             _zoom = Math.Clamp(MathF.Round((_zoom + delta) * 100f) / 100f, 1f, 3f);
             ApplyPanScan();
-            ShowToast($"확대 {_zoom:0.0}배");
+            ShowToast(Loc.F("S_ZoomToast", $"{_zoom:0.0}"));
         }
 
         private void ApplyPanScan()
@@ -1449,7 +1570,7 @@ namespace OctoPlayer
         {
             _aspectMode = mode;
             ApplyAspect();
-            ShowToast($"화면 비율: {AspectLabel(mode)}");
+            ShowToast(Loc.F("S_AspectToast", AspectLabel(mode)));
         }
 
         private void ApplyAspect()
@@ -1473,8 +1594,8 @@ namespace OctoPlayer
 
         private static string AspectLabel(string mode) => mode switch
         {
-            "keep" => "화면 비율 유지",
-            "orig" => "원본 비율",
+            "keep" => Loc.T("S_AspectKeepLabel"),
+            "orig" => Loc.T("S_AspectOrig"),
             _ => mode
         };
 
@@ -1488,7 +1609,7 @@ namespace OctoPlayer
             uint w = 0, h = 0;
             if (!_mediaPlayer.Size(0, ref w, ref h) || w == 0 || h == 0)
             {
-                ShowToast("재생 중인 영상이 없습니다");
+                ShowToast(Loc.T("S_NoVideo"));
                 return;
             }
 
@@ -1501,7 +1622,7 @@ namespace OctoPlayer
             DpiScale dpi = VisualTreeHelper.GetDpi(this);
             Width = Math.Max(MinWidth, w * factor / dpi.DpiScaleX);
             Height = Math.Max(MinHeight, h * factor / dpi.DpiScaleY + TitleBar.Height);
-            ShowToast($"화면 크기 {factor:0.0}배");
+            ShowToast(Loc.F("S_SizeToast", $"{factor:0.0}"));
         }
 
         private void Menu_Fullscreen(object? sender, RoutedEventArgs e) => ToggleFullscreen();
@@ -1752,7 +1873,20 @@ namespace OctoPlayer
             {
                 _settings.Save();
                 ApplyRuntimeSettings();
+
+                // 언어 변경은 리소스 사전 교체로 즉시 반영됩니다(DynamicResource).
+                // 코드에서 설정하는 텍스트만 다시 그립니다.
+                Loc.Apply(_settings.Language);
+                RefreshLocalizedTexts();
             }
+        }
+
+        /// <summary>언어 변경 직후, 코드에서 직접 설정하는 텍스트를 현재 언어로 다시 그립니다.</summary>
+        private void RefreshLocalizedTexts()
+        {
+            UpdateRepeatButton();
+            UpdateVolumeText();
+            RenderChapterMarkers(); // 이름 없는 챕터의 "챕터 N" 툴팁
         }
 
         private void Menu_TogglePlaylist(object? sender, RoutedEventArgs e)
@@ -1779,10 +1913,10 @@ namespace OctoPlayer
         {
             var sb = new System.Text.StringBuilder();
             PlaylistItem? item = _playlist.Current;
-            sb.AppendLine($"파일: {item?.FilePath ?? "(URL/없음)"}");
-            sb.AppendLine($"길이: {FormatTime(Volatile.Read(ref _cachedLengthMs))}");
-            sb.AppendLine($"위치: {FormatTime(Volatile.Read(ref _cachedTimeMs))}");
-            sb.AppendLine($"재생 속도: {_playbackRate:0.##}x");
+            sb.AppendLine($"{Loc.T("S_InfoFile")}: {item?.FilePath ?? Loc.T("S_InfoNone")}");
+            sb.AppendLine($"{Loc.T("S_InfoLength")}: {FormatTime(Volatile.Read(ref _cachedLengthMs))}");
+            sb.AppendLine($"{Loc.T("S_InfoPos")}: {FormatTime(Volatile.Read(ref _cachedTimeMs))}");
+            sb.AppendLine($"{Loc.T("S_InfoSpeed")}: {_playbackRate:0.##}x");
             sb.AppendLine();
 
             if (_currentMedia != null)
@@ -1792,22 +1926,22 @@ namespace OctoPlayer
                     switch (track.TrackType)
                     {
                         case TrackType.Video:
-                            sb.AppendLine($"[비디오] {FourCc(track.Codec)}  {track.Data.Video.Width}x{track.Data.Video.Height}"
+                            sb.AppendLine($"{Loc.T("S_InfoVideoTag")} {FourCc(track.Codec)}  {track.Data.Video.Width}x{track.Data.Video.Height}"
                                 + (track.Data.Video.FrameRateDen > 0
                                     ? $"  {(double)track.Data.Video.FrameRateNum / track.Data.Video.FrameRateDen:0.###} fps"
                                     : ""));
                             break;
                         case TrackType.Audio:
-                            sb.AppendLine($"[오디오] {FourCc(track.Codec)}  {track.Data.Audio.Rate} Hz  {track.Data.Audio.Channels}ch");
+                            sb.AppendLine($"{Loc.T("S_InfoAudioTag")} {FourCc(track.Codec)}  {track.Data.Audio.Rate} Hz  {track.Data.Audio.Channels}ch");
                             break;
                         case TrackType.Text:
-                            sb.AppendLine($"[자막] {FourCc(track.Codec)}  {track.Language ?? ""}");
+                            sb.AppendLine($"{Loc.T("S_InfoSubTag")} {FourCc(track.Codec)}  {track.Language ?? ""}");
                             break;
                     }
                 }
             }
 
-            InfoWindow.Show(this, "재생 정보", sb.ToString());
+            InfoWindow.Show(this, Loc.T("S_MediaInfoTitle"), sb.ToString());
         }
 
         private static string FourCc(uint codec)
@@ -1822,9 +1956,9 @@ namespace OctoPlayer
 
         private void Menu_About(object? sender, RoutedEventArgs e)
         {
-            InfoWindow.Show(this, "프로그램 정보",
+            InfoWindow.Show(this, Loc.T("S_AboutTitle"),
                 "OctoPlayer\n\n" +
-                "libVLC 기반 동영상 플레이어\n" +
+                $"{Loc.T("S_AboutBody")}\n" +
                 "OctoBrain Softworks\n\n" +
                 $"LibVLCSharp {typeof(LibVLC).Assembly.GetName().Version}\n" +
                 $".NET {Environment.Version}");
@@ -1844,13 +1978,13 @@ namespace OctoPlayer
 
             MiRepeatMode.Header = _playlist.RepeatMode switch
             {
-                RepeatMode.All => "반복 재생: 전체",
-                RepeatMode.One => "반복 재생: 한 개",
-                _ => "반복 재생: 없음"
+                RepeatMode.All => Loc.T("S_RepeatAll"),
+                RepeatMode.One => Loc.T("S_RepeatOne"),
+                _ => Loc.T("S_RepeatNone")
             };
 
-            MiAbA.Header = _abStartMs >= 0 ? $"시작 지점 (A): {FormatTime(_abStartMs)}" : "시작 지점 지정 (A)";
-            MiAbB.Header = _abEndMs >= 0 ? $"끝 지점 (B): {FormatTime(_abEndMs)}" : "끝 지점 지정 (B)";
+            MiAbA.Header = _abStartMs >= 0 ? $"{Loc.T("S_AbSetA")}: {FormatTime(_abStartMs)}" : Loc.T("S_AbSetA");
+            MiAbB.Header = _abEndMs >= 0 ? $"{Loc.T("S_AbSetB")}: {FormatTime(_abEndMs)}" : Loc.T("S_AbSetB");
 
             // 화면 비율 라디오
             MiAspectKeep.IsChecked = _aspectMode == "keep";
@@ -2201,14 +2335,50 @@ namespace OctoPlayer
             _lastTimerTimeMs = targetMs; // 뒤로 시크가 반복 랩으로 오인되지 않게 기준점 갱신
         }
 
+        // 시크 요청 직렬화: 요청마다 Task.Run을 띄우면 스레드풀에서 실행 순서가 뒤집혀
+        // 이전 목표가 나중에 적용되어 "원래 위치로 되돌아가는" 현상이 생길 수 있습니다.
+        // 최신 목표 하나만 유지하고 단일 워커가 항상 마지막 값을 적용합니다.
+        private long _seekRequestMs = -1;
+        private int _seekWorkerRunning;
+
         /// <summary>
         /// libVLC 시간 설정(시크)은 입력 스레드 잠금을 기다리며 UI를 수백 ms 막을 수 있어
-        /// 백그라운드에서 수행합니다. 실제 도착 여부는 TimeChanged 캐시로 추적합니다.
+        /// 백그라운드 워커에서 수행합니다. 실제 도착 여부는 TimeChanged 캐시로 추적합니다.
         /// </summary>
         private void SetPlayerTimeAsync(long targetMs)
         {
+            Interlocked.Exchange(ref _seekRequestMs, targetMs);
+            StartSeekWorkerIfIdle();
+        }
+
+        private void StartSeekWorkerIfIdle()
+        {
+            if (Interlocked.CompareExchange(ref _seekWorkerRunning, 1, 0) != 0)
+            {
+                return; // 이미 워커가 실행 중 → 최신 목표만 갈아끼움
+            }
+
             MediaPlayer mp = _mediaPlayer;
-            _ = Task.Run(() => { try { mp.Time = targetMs; } catch { } });
+            _ = Task.Run(() =>
+            {
+                try
+                {
+                    long target;
+                    while ((target = Interlocked.Exchange(ref _seekRequestMs, -1)) >= 0)
+                    {
+                        try { mp.Time = target; } catch { }
+                    }
+                }
+                finally
+                {
+                    Volatile.Write(ref _seekWorkerRunning, 0);
+                    // 워커 종료 직전에 새 요청이 들어온 경우를 놓치지 않도록 재확인
+                    if (Interlocked.Read(ref _seekRequestMs) >= 0)
+                    {
+                        StartSeekWorkerIfIdle();
+                    }
+                }
+            });
         }
 
         private void UiTimer_Tick(object? sender, EventArgs e)
@@ -2243,10 +2413,12 @@ namespace OctoPlayer
                 {
                     _pendingSeekMs = -1; // 목표 도착
                 }
-                else if (elapsed > 2000)
+                else if (elapsed > 4000)
                 {
-                    // 포기(시크 불가 구간 등). 일시정지 중에는 TimeChanged가 오지 않을 수 있어
-                    // 목표값을 캐시에 반영해 표시가 이전 위치로 되돌아가지 않게 합니다.
+                    // 포기(시크 불가 구간 등). 느린 디스크에서 시크가 4초 이상 걸리는 경우는 드물어
+                    // 이 시간까지 재적용해야 시크가 조용히 사라져 원래 위치로 돌아가는 문제가 없습니다.
+                    // 일시정지 중에는 TimeChanged가 오지 않을 수 있어 목표값을 캐시에 반영해
+                    // 표시가 이전 위치로 되돌아가지 않게 합니다.
                     Volatile.Write(ref _cachedTimeMs, _pendingSeekMs);
                     _lastTimerTimeMs = _pendingSeekMs;
                     _pendingSeekMs = -1;
@@ -2440,8 +2612,8 @@ namespace OctoPlayer
 
             MessageBoxResult result = MessageBox.Show(
                 this,
-                $"다음 파일을 휴지통으로 삭제할까요?\n\n{item.FilePath}",
-                "파일 삭제",
+                Loc.F("S_DeleteConfirm", item.FilePath),
+                Loc.T("S_DeleteTitle"),
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Warning,
                 MessageBoxResult.No);
@@ -2464,7 +2636,7 @@ namespace OctoPlayer
 
             if (!RecycleBin.Delete(item.FilePath))
             {
-                MessageBox.Show(this, "파일을 삭제하지 못했습니다.", "파일 삭제 실패",
+                MessageBox.Show(this, Loc.T("S_DeleteFailMsg"), Loc.T("S_DeleteFailTitle"),
                     MessageBoxButton.OK, MessageBoxImage.Error);
                 UpdatePlayPauseButton();
                 return;
@@ -2611,9 +2783,9 @@ namespace OctoPlayer
         {
             RepeatButton.Content = _playlist.RepeatMode switch
             {
-                RepeatMode.All => "반복: 전체",
-                RepeatMode.One => "반복: 한 개",
-                _ => "반복: 없음"
+                RepeatMode.All => Loc.T("S_RepeatAll"),
+                RepeatMode.One => Loc.T("S_RepeatOne"),
+                _ => Loc.T("S_RepeatNone")
             };
             RepeatButton.Background = _playlist.RepeatMode != RepeatMode.None
                 ? (Brush)FindResource("AccentSoftBrush")

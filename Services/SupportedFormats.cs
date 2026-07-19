@@ -54,10 +54,10 @@ namespace OctoPlayer.Services
             string allMask = string.Join(";", AllExtensions.Select(e => "*" + e));
 
             return
-                $"미디어 파일|{allMask}|" +
-                $"동영상 파일|{videoMask}|" +
-                $"오디오 파일|{audioMask}|" +
-                "모든 파일|*.*";
+                $"{Loc.T("S_FilterMedia")}|{allMask}|" +
+                $"{Loc.T("S_FilterVideo")}|{videoMask}|" +
+                $"{Loc.T("S_FilterAudio")}|{audioMask}|" +
+                $"{Loc.T("S_AllFiles")}|*.*";
         }
     }
 }

@@ -63,6 +63,9 @@ namespace OctoPlayer.Services
         /// <summary>창을 항상 위에 표시할지 여부입니다.</summary>
         public bool AlwaysOnTop { get; set; }
 
+        /// <summary>UI 언어("ko"/"en"). null 또는 빈 값이면 시스템 언어를 따릅니다.</summary>
+        public string? Language { get; set; }
+
         /// <summary>영상 캡처 저장 폴더입니다(비어 있으면 사진\OctoPlayer).</summary>
         public string? CaptureFolder { get; set; }
 

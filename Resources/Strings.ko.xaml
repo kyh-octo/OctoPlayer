@@ -1,0 +1,220 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=mscorlib">
+
+    <!-- ===== 메뉴 ===== -->
+    <sys:String x:Key="S_MenuOpen">열기</sys:String>
+    <sys:String x:Key="S_OpenFile">파일 열기...</sys:String>
+    <sys:String x:Key="S_OpenUrl">주소 열기...</sys:String>
+    <sys:String x:Key="S_OpenFolder">폴더 열기...</sys:String>
+    <sys:String x:Key="S_Close">닫기</sys:String>
+    <sys:String x:Key="S_MenuPlay">재생</sys:String>
+    <sys:String x:Key="S_PlayPause">재생/일시 중지</sys:String>
+    <sys:String x:Key="S_PrevFile">이전 파일 재생</sys:String>
+    <sys:String x:Key="S_NextFile">다음 파일 재생</sys:String>
+    <sys:String x:Key="S_Speed">재생 속도</sys:String>
+    <sys:String x:Key="S_SpeedDown">느리게 (0.1배)</sys:String>
+    <sys:String x:Key="S_SpeedUp">빠르게 (0.1배)</sys:String>
+    <sys:String x:Key="S_SpeedReset">보통 속도 (1.0배)</sys:String>
+    <sys:String x:Key="S_AbRepeat">구간 반복</sys:String>
+    <sys:String x:Key="S_AbSetA">시작 지점 지정 (A)</sys:String>
+    <sys:String x:Key="S_AbSetB">끝 지점 지정 (B)</sys:String>
+    <sys:String x:Key="S_AbClear">구간 반복 해제</sys:String>
+    <sys:String x:Key="S_RepeatToggle">반복 재생 토글</sys:String>
+    <sys:String x:Key="S_Shuffle">셔플 재생</sys:String>
+    <sys:String x:Key="S_MenuSubtitles">자막</sys:String>
+    <sys:String x:Key="S_SubVisible">자막 보이기</sys:String>
+    <sys:String x:Key="S_OpenSubtitle">자막 열기...</sys:String>
+    <sys:String x:Key="S_SubSync">자막 싱크</sys:String>
+    <sys:String x:Key="S_SubSlower">0.5초 느리게</sys:String>
+    <sys:String x:Key="S_SubFaster">0.5초 빠르게</sys:String>
+    <sys:String x:Key="S_SubSyncReset">싱크 초기화</sys:String>
+    <sys:String x:Key="S_SubTracks">자막 트랙</sys:String>
+    <sys:String x:Key="S_None">(없음)</sys:String>
+    <sys:String x:Key="S_MenuVideo">영상</sys:String>
+    <sys:String x:Key="S_Capture">영상 캡처</sys:String>
+    <sys:String x:Key="S_Rotate">화면 회전</sys:String>
+    <sys:String x:Key="S_VideoAdjust">영상 속성</sys:String>
+    <sys:String x:Key="S_BrightUp">명도 높이기</sys:String>
+    <sys:String x:Key="S_BrightDown">명도 낮추기</sys:String>
+    <sys:String x:Key="S_ContrastUp">대비 높이기</sys:String>
+    <sys:String x:Key="S_ContrastDown">대비 낮추기</sys:String>
+    <sys:String x:Key="S_SatUp">채도 높이기</sys:String>
+    <sys:String x:Key="S_SatDown">채도 낮추기</sys:String>
+    <sys:String x:Key="S_HueUp">색상 +</sys:String>
+    <sys:String x:Key="S_HueDown">색상 -</sys:String>
+    <sys:String x:Key="S_AdjustReset">속성 초기화</sys:String>
+    <sys:String x:Key="S_MenuAudio">소리</sys:String>
+    <sys:String x:Key="S_VolumeUp">소리 크게</sys:String>
+    <sys:String x:Key="S_VolumeDown">소리 작게</sys:String>
+    <sys:String x:Key="S_Mute">음소거</sys:String>
+    <sys:String x:Key="S_AudioTracks">오디오 트랙</sys:String>
+    <sys:String x:Key="S_Equalizer">이퀄라이저</sys:String>
+    <sys:String x:Key="S_Loading">(로딩)</sys:String>
+    <sys:String x:Key="S_PanScan">팬 &amp; 스캔</sys:String>
+    <sys:String x:Key="S_PanLeft">왼쪽으로 이동</sys:String>
+    <sys:String x:Key="S_PanRight">오른쪽으로 이동</sys:String>
+    <sys:String x:Key="S_PanUp">위로 이동</sys:String>
+    <sys:String x:Key="S_PanDown">아래로 이동</sys:String>
+    <sys:String x:Key="S_ZoomIn">확대</sys:String>
+    <sys:String x:Key="S_ZoomOut">축소</sys:String>
+    <sys:String x:Key="S_PanScanReset">위치/크기 초기화</sys:String>
+    <sys:String x:Key="S_MenuAspect">화면 비율</sys:String>
+    <sys:String x:Key="S_AspectKeep">화면 비율 유지 (권장)</sys:String>
+    <sys:String x:Key="S_AspectKeepLabel">화면 비율 유지</sys:String>
+    <sys:String x:Key="S_AspectOrig">원본 비율</sys:String>
+    <sys:String x:Key="S_MenuSize">화면 크기</sys:String>
+    <sys:String x:Key="S_Size05">0.5배 크기</sys:String>
+    <sys:String x:Key="S_Size10">1.0배 크기</sys:String>
+    <sys:String x:Key="S_Size15">1.5배 크기</sys:String>
+    <sys:String x:Key="S_Size20">2.0배 크기</sys:String>
+    <sys:String x:Key="S_Fullscreen">전체 화면</sys:String>
+    <sys:String x:Key="S_Maximize">꽉찬 화면</sys:String>
+    <sys:String x:Key="S_Settings">환경 설정...</sys:String>
+    <sys:String x:Key="S_Playlist">재생목록</sys:String>
+    <sys:String x:Key="S_Controller">제어창...</sys:String>
+    <sys:String x:Key="S_MediaInfo">재생 정보...</sys:String>
+    <sys:String x:Key="S_About">프로그램 정보...</sys:String>
+    <sys:String x:Key="S_Exit">종료</sys:String>
+
+    <!-- ===== 컨트롤바 / 재생목록 패널 ===== -->
+    <sys:String x:Key="S_Open">열기</sys:String>
+    <sys:String x:Key="S_BtnShuffle">셔플</sys:String>
+    <sys:String x:Key="S_BtnSubtitles">자막</sys:String>
+    <sys:String x:Key="S_BtnRotate">↻ 회전</sys:String>
+    <sys:String x:Key="S_BtnFullscreen">전체화면</sys:String>
+    <sys:String x:Key="S_TipPrev">이전 파일 (PgUp)</sys:String>
+    <sys:String x:Key="S_TipPlayPause">재생/일시 중지 (Space)</sys:String>
+    <sys:String x:Key="S_TipStop">정지</sys:String>
+    <sys:String x:Key="S_TipNext">다음 파일 (PgDn)</sys:String>
+    <sys:String x:Key="S_TipRepeatCount">반복 횟수</sys:String>
+    <sys:String x:Key="S_TipSubtitles">자막 켜기/끄기 (Alt+H)</sys:String>
+    <sys:String x:Key="S_TipViewMode">보기 방식 전환</sys:String>
+    <sys:String x:Key="S_TipClosePlaylist">재생목록 닫기 (F6)</sys:String>
+    <sys:String x:Key="S_TipWindowed">창 모드 (Esc)</sys:String>
+    <sys:String x:Key="S_TipMinimize">최소화</sys:String>
+    <sys:String x:Key="S_PlRemove">재생목록에서 제거</sys:String>
+    <sys:String x:Key="S_PlDelete">파일 삭제...</sys:String>
+    <sys:String x:Key="S_PlViewMode">보기 방식</sys:String>
+    <sys:String x:Key="S_PlViewTitles">제목 목록</sys:String>
+    <sys:String x:Key="S_PlViewThumbs">미리보기</sys:String>
+
+    <!-- ===== 토스트/상태 ===== -->
+    <sys:String x:Key="S_ResumeToast">이어보기: {0}</sys:String>
+    <sys:String x:Key="S_SpeedToast">재생 속도 {0}x</sys:String>
+    <sys:String x:Key="S_AbAToast">구간 반복 A 지점: {0}</sys:String>
+    <sys:String x:Key="S_AbNeedA">먼저 A 지점을 지정하세요</sys:String>
+    <sys:String x:Key="S_AbRangeToast">구간 반복 {0} ~ {1}</sys:String>
+    <sys:String x:Key="S_ShuffleOn">셔플 켬</sys:String>
+    <sys:String x:Key="S_ShuffleOff">셔플 끔</sys:String>
+    <sys:String x:Key="S_RepeatCountToast">파일 반복 횟수: {0}회</sys:String>
+    <sys:String x:Key="S_SubHidden">자막 숨김</sys:String>
+    <sys:String x:Key="S_SubShown">자막 표시</sys:String>
+    <sys:String x:Key="S_SubNone">표시할 자막 없음</sys:String>
+    <sys:String x:Key="S_SubDelayToast">자막 싱크 {0}초</sys:String>
+    <sys:String x:Key="S_SubSyncResetToast">자막 싱크 초기화</sys:String>
+    <sys:String x:Key="S_NoVideo">재생 중인 영상이 없습니다</sys:String>
+    <sys:String x:Key="S_CaptureSaved">캡처 저장: {0}</sys:String>
+    <sys:String x:Key="S_CaptureFail">캡처 실패</sys:String>
+    <sys:String x:Key="S_RotateToast">화면 회전 {0}°</sys:String>
+    <sys:String x:Key="S_Brightness">명도</sys:String>
+    <sys:String x:Key="S_Contrast">대비</sys:String>
+    <sys:String x:Key="S_Saturation">채도</sys:String>
+    <sys:String x:Key="S_Hue">색상</sys:String>
+    <sys:String x:Key="S_AdjustResetToast">영상 속성 초기화</sys:String>
+    <sys:String x:Key="S_VolumeToast">볼륨 {0}</sys:String>
+    <sys:String x:Key="S_Muted">음소거</sys:String>
+    <sys:String x:Key="S_Unmuted">음소거 해제</sys:String>
+    <sys:String x:Key="S_ZoomFirst">먼저 확대(Num +)하세요</sys:String>
+    <sys:String x:Key="S_PanToast">이동 X{0} Y{1}</sys:String>
+    <sys:String x:Key="S_ZoomToast">확대 {0}배</sys:String>
+    <sys:String x:Key="S_PanScanResetToast">팬 &amp; 스캔 초기화</sys:String>
+    <sys:String x:Key="S_AspectToast">화면 비율: {0}</sys:String>
+    <sys:String x:Key="S_SizeToast">화면 크기 {0}배</sys:String>
+    <sys:String x:Key="S_EqOff">끄기</sys:String>
+    <sys:String x:Key="S_EqOffToast">이퀄라이저 끔</sys:String>
+    <sys:String x:Key="S_EqToast">이퀄라이저: {0}</sys:String>
+    <sys:String x:Key="S_Track">트랙 {0}</sys:String>
+    <sys:String x:Key="S_NoAudio">(재생 중인 오디오 없음)</sys:String>
+    <sys:String x:Key="S_SubOff">자막 끄기</sys:String>
+    <sys:String x:Key="S_RepeatNone">반복: 없음</sys:String>
+    <sys:String x:Key="S_RepeatAll">반복: 전체</sys:String>
+    <sys:String x:Key="S_RepeatOne">반복: 한 개</sys:String>
+    <sys:String x:Key="S_Chapter">챕터 {0}</sys:String>
+
+    <!-- ===== 대화상자/창 ===== -->
+    <sys:String x:Key="S_MediaInfoTitle">재생 정보</sys:String>
+    <sys:String x:Key="S_AboutTitle">프로그램 정보</sys:String>
+    <sys:String x:Key="S_AboutBody">libVLC 기반 동영상 플레이어</sys:String>
+    <sys:String x:Key="S_InfoFile">파일</sys:String>
+    <sys:String x:Key="S_InfoLength">길이</sys:String>
+    <sys:String x:Key="S_InfoPos">위치</sys:String>
+    <sys:String x:Key="S_InfoSpeed">재생 속도</sys:String>
+    <sys:String x:Key="S_InfoVideoTag">[비디오]</sys:String>
+    <sys:String x:Key="S_InfoAudioTag">[오디오]</sys:String>
+    <sys:String x:Key="S_InfoSubTag">[자막]</sys:String>
+    <sys:String x:Key="S_InfoNone">(URL/없음)</sys:String>
+    <sys:String x:Key="S_InitFail" xml:space="preserve">미디어 엔진 초기화에 실패했습니다.
+{0}</sys:String>
+    <sys:String x:Key="S_OpenMediaTitle">미디어 파일 열기</sys:String>
+    <sys:String x:Key="S_SelectFolderTitle">재생할 폴더 선택</sys:String>
+    <sys:String x:Key="S_OpenUrlTitle">주소 열기</sys:String>
+    <sys:String x:Key="S_OpenUrlLabel">재생할 주소(URL)를 입력하세요:</sys:String>
+    <sys:String x:Key="S_OpenSubTitle">자막 파일 열기</sys:String>
+    <sys:String x:Key="S_SubFilter">자막 파일</sys:String>
+    <sys:String x:Key="S_AllFiles">모든 파일</sys:String>
+    <sys:String x:Key="S_FilterMedia">미디어 파일</sys:String>
+    <sys:String x:Key="S_FilterVideo">동영상 파일</sys:String>
+    <sys:String x:Key="S_FilterAudio">오디오 파일</sys:String>
+    <sys:String x:Key="S_DeleteTitle">파일 삭제</sys:String>
+    <sys:String x:Key="S_DeleteConfirm" xml:space="preserve">다음 파일을 휴지통으로 삭제할까요?
+
+{0}</sys:String>
+    <sys:String x:Key="S_DeleteFailTitle">파일 삭제 실패</sys:String>
+    <sys:String x:Key="S_DeleteFailMsg">파일을 삭제하지 못했습니다.</sys:String>
+
+    <!-- ===== 환경 설정 ===== -->
+    <sys:String x:Key="S_SettingsTitle">환경 설정</sys:String>
+    <sys:String x:Key="S_SecNav">탐색</sys:String>
+    <sys:String x:Key="S_SideSkip">마우스 뒤로/앞으로 버튼 이동 시간</sys:String>
+    <sys:String x:Key="S_ArrowSkip">방향키(←/→) 이동 시간</sys:String>
+    <sys:String x:Key="S_Seconds">초</sys:String>
+    <sys:String x:Key="S_SecAudio">소리</sys:String>
+    <sys:String x:Key="S_VolumeStep">휠/방향키(↑/↓) 볼륨 조절량</sys:String>
+    <sys:String x:Key="S_Steps">단계</sys:String>
+    <sys:String x:Key="S_SecPlayback">재생</sys:String>
+    <sys:String x:Key="S_ResumeOpt">마지막으로 본 위치에서 이어서 재생</sys:String>
+    <sys:String x:Key="S_RememberRateOpt">종료 시 재생 속도 기억</sys:String>
+    <sys:String x:Key="S_SecSubtitles">자막</sys:String>
+    <sys:String x:Key="S_AutoSubOpt">같은 이름의 자막 파일 자동 불러오기</sys:String>
+    <sys:String x:Key="S_SecDisplay">화면</sys:String>
+    <sys:String x:Key="S_RememberSizeOpt">종료 시 창 크기 기억</sys:String>
+    <sys:String x:Key="S_AlwaysOnTopOpt">항상 위에 표시</sys:String>
+    <sys:String x:Key="S_SecLanguage">언어</sys:String>
+    <sys:String x:Key="S_LangAuto">시스템 기본</sys:String>
+    <sys:String x:Key="S_SecCapture">캡처</sys:String>
+    <sys:String x:Key="S_CaptureFolderHint">저장 폴더 (비워 두면 사진\OctoPlayer)</sys:String>
+    <sys:String x:Key="S_Browse">찾아보기...</sys:String>
+    <sys:String x:Key="S_SelectCaptureFolder">캡처 저장 폴더 선택</sys:String>
+    <sys:String x:Key="S_SecAssoc">파일 연결</sys:String>
+    <sys:String x:Key="S_AssocRegistered">등록됨 — 파일 우클릭 > 연결 프로그램, 또는 Windows 설정 > 기본 앱에서 OctoPlayer를 선택할 수 있습니다.</sys:String>
+    <sys:String x:Key="S_AssocNotRegistered">등록되지 않음 — 등록하면 동영상/음악 파일을 OctoPlayer로 열 수 있게 됩니다.</sys:String>
+    <sys:String x:Key="S_AssocRegister">확장자 연결 등록</sys:String>
+    <sys:String x:Key="S_AssocUnregister">연결 해제</sys:String>
+    <sys:String x:Key="S_AssocDoneMsg" xml:space="preserve">등록되었습니다.
+
+기본 플레이어로 쓰려면 동영상 파일 우클릭 → 연결 프로그램 → 다른 앱 선택 → OctoPlayer → '항상 사용'을 선택하세요.</sys:String>
+    <sys:String x:Key="S_AssocFailMsg" xml:space="preserve">등록에 실패했습니다.
+{0}</sys:String>
+    <sys:String x:Key="S_AssocUnregFailMsg" xml:space="preserve">해제에 실패했습니다.
+{0}</sys:String>
+    <sys:String x:Key="S_OK">확인</sys:String>
+    <sys:String x:Key="S_Cancel">취소</sys:String>
+    <sys:String x:Key="S_ControllerTitle">제어창</sys:String>
+
+    <!-- ===== 파일 연결(레지스트리 표시 문자열) ===== -->
+    <sys:String x:Key="S_AssocProgIdName">OctoPlayer 미디어 파일</sys:String>
+    <sys:String x:Key="S_AssocOpenVerb">OctoPlayer로 재생</sys:String>
+    <sys:String x:Key="S_AssocAppDesc">OctoBrain Softworks 동영상 플레이어</sys:String>
+
+</ResourceDictionary>
