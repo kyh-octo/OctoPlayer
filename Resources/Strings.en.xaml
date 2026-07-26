@@ -93,6 +93,9 @@
     <sys:String x:Key="S_TipClosePlaylist">Close playlist (F6)</sys:String>
     <sys:String x:Key="S_TipWindowed">Windowed mode (Esc)</sys:String>
     <sys:String x:Key="S_TipMinimize">Minimize</sys:String>
+    <sys:String x:Key="S_PlAddFiles">Add Files...</sys:String>
+    <sys:String x:Key="S_PlAddFolder">Add Folder...</sys:String>
+    <sys:String x:Key="S_PlAddedToast">Added {0} item(s) to playlist</sys:String>
     <sys:String x:Key="S_PlRemove">Remove from Playlist</sys:String>
     <sys:String x:Key="S_PlDelete">Delete File...</sys:String>
     <sys:String x:Key="S_PlViewMode">View Mode</sys:String>
@@ -184,6 +187,7 @@
     <sys:String x:Key="S_Steps">steps</sys:String>
     <sys:String x:Key="S_SecPlayback">Playback</sys:String>
     <sys:String x:Key="S_ResumeOpt">Resume from last position</sys:String>
+    <sys:String x:Key="S_OpenScanOpt">When opening a file, also open files from its folder</sys:String>
     <sys:String x:Key="S_RememberRateOpt">Remember playback speed on exit</sys:String>
     <sys:String x:Key="S_SecSubtitles">Subtitles</sys:String>
     <sys:String x:Key="S_AutoSubOpt">Auto-load matching subtitle files</sys:String>

@@ -57,6 +57,10 @@ Name: "{group}\{#MyAppName} 제거"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
+; libVLC 플러그인 캐시(plugins.dat)를 미리 생성해 첫 실행부터 빠르게 시작되도록 합니다.
+; (캐시가 없으면 libVLC가 실행마다 수백 개 플러그인을 전체 스캔해 시작이 수 초 느려집니다.)
+Filename: "{app}\{#MyAppExeName}"; Parameters: "--gen-plugins-cache"; \
+    StatusMsg: "미디어 엔진을 준비하는 중..."; Flags: runhidden waituntilterminated
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; \
     Flags: nowait postinstall skipifsilent
 

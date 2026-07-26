@@ -93,6 +93,9 @@
     <sys:String x:Key="S_TipClosePlaylist">재생목록 닫기 (F6)</sys:String>
     <sys:String x:Key="S_TipWindowed">창 모드 (Esc)</sys:String>
     <sys:String x:Key="S_TipMinimize">최소화</sys:String>
+    <sys:String x:Key="S_PlAddFiles">파일 추가...</sys:String>
+    <sys:String x:Key="S_PlAddFolder">폴더 추가...</sys:String>
+    <sys:String x:Key="S_PlAddedToast">재생목록에 {0}개 추가됨</sys:String>
     <sys:String x:Key="S_PlRemove">재생목록에서 제거</sys:String>
     <sys:String x:Key="S_PlDelete">파일 삭제...</sys:String>
     <sys:String x:Key="S_PlViewMode">보기 방식</sys:String>
@@ -184,6 +187,7 @@
     <sys:String x:Key="S_Steps">단계</sys:String>
     <sys:String x:Key="S_SecPlayback">재생</sys:String>
     <sys:String x:Key="S_ResumeOpt">마지막으로 본 위치에서 이어서 재생</sys:String>
+    <sys:String x:Key="S_OpenScanOpt">파일을 열 때 같은 폴더의 파일도 함께 열기</sys:String>
     <sys:String x:Key="S_RememberRateOpt">종료 시 재생 속도 기억</sys:String>
     <sys:String x:Key="S_SecSubtitles">자막</sys:String>
     <sys:String x:Key="S_AutoSubOpt">같은 이름의 자막 파일 자동 불러오기</sys:String>

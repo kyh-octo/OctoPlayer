@@ -86,7 +86,12 @@
         <vlc:VideoView x:Name="VideoView" Grid.Row="0" Grid.Column="0" Background="Black">
             <!-- 배경 알파를 1로 두는 이유: 오버레이는 투명 레이어드 창이라 완전 투명(alpha=0) 영역은
                  OS가 클릭을 아래(영상 창)로 통과시켜 더블클릭/우클릭/휠이 전혀 동작하지 않습니다. -->
+            <!-- TextElement.*를 명시하는 이유: 전체화면에서 재생목록/컨트롤바가 이 오버레이
+                 (libVLC가 만드는 별도 투명 창)로 이동하면 메인 창의 글꼴/글자색 상속이 끊겨
+                 기본값(검정 글자)이 적용돼 다크 배경에서 보이지 않았습니다. -->
             <Grid x:Name="OverlayRoot" Background="#01000000"
+                  TextElement.Foreground="{StaticResource TextBrush}"
+                  TextElement.FontFamily="Segoe UI" TextElement.FontSize="13"
                   MouseWheel="OverlayRoot_MouseWheel"
                   PreviewMouseDown="OverlayRoot_PreviewMouseDown"
                   MouseMove="OverlayRoot_MouseMove">
@@ -248,6 +253,9 @@
                              RequestBringIntoView="PlaylistList_RequestBringIntoView">
                         <ListBox.ContextMenu>
                             <ContextMenu x:Name="PlaylistMenu" Opened="PlaylistMenu_Opened">
+                                <MenuItem Header="{DynamicResource S_PlAddFiles}" Click="PlaylistMenu_AddFiles"/>
+                                <MenuItem Header="{DynamicResource S_PlAddFolder}" Click="PlaylistMenu_AddFolder"/>
+                                <Separator/>
                                 <MenuItem x:Name="MiPlRemove" Header="{DynamicResource S_PlRemove}" Click="PlaylistMenu_Remove"/>
                                 <MenuItem x:Name="MiPlDelete" Header="{DynamicResource S_PlDelete}" Click="PlaylistMenu_Delete"/>
                                 <Separator/>

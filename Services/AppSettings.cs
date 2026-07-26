@@ -41,6 +41,9 @@ namespace OctoPlayer.Services
         /// <summary>마지막으로 보던 위치에서 이어서 재생할지 여부입니다.</summary>
         public bool ResumePlayback { get; set; } = true;
 
+        /// <summary>파일을 열 때 같은 폴더의 다른 파일도 재생목록에 함께 추가할지 여부입니다.</summary>
+        public bool OpenFolderScan { get; set; } = true;
+
         /// <summary>마지막 재생 파일 경로(이어보기용)입니다.</summary>
         public string? LastFilePath { get; set; }
 

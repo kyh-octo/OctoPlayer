@@ -55,14 +55,14 @@ namespace OctoPlayer
         // 이벤트(TimeChanged 등)로 받은 값을 캐시해 두고 UI에서는 캐시만 읽습니다.
         private long _cachedTimeMs;
         private long _cachedLengthMs;
-        private float _cachedPosition;
         private bool _cachedSeekable;
         private volatile VLCState _cachedState = VLCState.NothingSpecial;
 
         // 진행 중인 시크 요청. libVLC 시크는 비동기라 바쁜 순간(버퍼링/반복 랩 등)에는
-        // 무시될 수 있어, 목표 위치에 도달할 때까지 짧게 재적용해 클릭이 확실히 반영되게 합니다.
+        // 무시될 수 있어, 제한된 횟수만 재적용해 클릭이 확실히 반영되게 합니다.
         private long _pendingSeekMs = -1;
         private DateTime _pendingSeekUtc;
+        private int _seekRetryCount;
         private Rect _restoreBounds;
         private int _rotation;
         private int _playerRotation;
@@ -140,6 +140,10 @@ namespace OctoPlayer
             _toastTimer.Tick += (_, _) => { _toastTimer.Stop(); Toast.Visibility = Visibility.Collapsed; };
             _idleTimer.Tick += (_, _) => HideControlsWhenIdle();
             _saveTimer.Tick += (_, _) => { _saveTimer.Stop(); SaveSettingsNow(); };
+
+            // 창 표시를 기다리지 않고 곧바로 백그라운드 초기화를 시작해 시작 시간을 줄입니다.
+            // (기존에는 Loaded 이후에 시작해 첫 렌더링 시간만큼 준비가 늦어졌습니다.)
+            InitializePlayerAsync();
         }
 
         // =====================================================================
@@ -162,10 +166,8 @@ namespace OctoPlayer
 
             if (_startupArgs.Length > 0)
             {
-                OpenPaths(_startupArgs, autoScanFolder: true); // 준비 전이므로 큐에 저장됨
+                OpenPaths(_startupArgs, _settings.OpenFolderScan); // 준비 전이므로 큐에 저장됨
             }
-
-            InitializePlayerAsync();
         }
 
         /// <summary>
@@ -191,7 +193,8 @@ namespace OctoPlayer
                 SubscribePlayerEvents(mp);
                 _playerRotation = _rotation;
                 VideoView.MediaPlayer = mp;
-                mp.Volume = (int)VolumeSlider.Value;
+                // Loaded(ApplySettings)보다 먼저 끝날 수 있으므로 슬라이더 대신 설정값을 씁니다.
+                mp.Volume = Math.Clamp(_settings.Volume, 0, 100);
 
                 _playerReady = true;
                 ContentArea.IsEnabled = true;
@@ -259,6 +262,15 @@ namespace OctoPlayer
                 "--freetype-font=Malgun Gothic"
             };
 
+            // libVLC는 플러그인 캐시(plugins.dat)를 읽기만 하고 스스로 만들지는 않아,
+            // 캐시가 없으면 매 실행마다 수백 개 플러그인 DLL을 전체 스캔합니다(시작 지연의 주원인).
+            // 캐시가 없을 때 이 옵션을 주면 이번 스캔 결과를 캐시로 기록해 다음 실행부터 빨라집니다.
+            // (공식 vlc-cache-gen 도구가 쓰는 것과 같은 방식입니다.)
+            if (!PluginsCacheExists())
+            {
+                options.Add("--reset-plugins-cache");
+            }
+
             if (rotation != 0)
             {
                 options.Add("--video-filter=transform");
@@ -266,6 +278,26 @@ namespace OctoPlayer
             }
 
             return options.ToArray();
+        }
+
+        private static bool PluginsCacheExists()
+        {
+            try
+            {
+                string arch = RuntimeInformation.ProcessArchitecture switch
+                {
+                    Architecture.X86 => "win-x86",
+                    Architecture.Arm64 => "win-arm64",
+                    _ => "win-x64"
+                };
+                string plugins = Path.Combine(AppContext.BaseDirectory, "libvlc", arch, "plugins");
+                // 앱과 함께 배포된 libvlc가 아니면(시스템 VLC 등) 캐시 관리에 관여하지 않습니다.
+                return !Directory.Exists(plugins) || File.Exists(Path.Combine(plugins, "plugins.dat"));
+            }
+            catch
+            {
+                return true; // 확인 실패 시 기본 동작 유지
+            }
         }
 
         private void ConfigurePlayer(MediaPlayer mp)
@@ -285,7 +317,6 @@ namespace OctoPlayer
             mp.EncounteredError += Player_EncounteredError;
             mp.TimeChanged += Player_TimeChanged;
             mp.LengthChanged += Player_LengthChanged;
-            mp.PositionChanged += Player_PositionChanged;
             mp.SeekableChanged += Player_SeekableChanged;
         }
 
@@ -299,7 +330,6 @@ namespace OctoPlayer
             mp.EncounteredError -= Player_EncounteredError;
             mp.TimeChanged -= Player_TimeChanged;
             mp.LengthChanged -= Player_LengthChanged;
-            mp.PositionChanged -= Player_PositionChanged;
             mp.SeekableChanged -= Player_SeekableChanged;
         }
 
@@ -313,9 +343,6 @@ namespace OctoPlayer
             Volatile.Write(ref _cachedLengthMs, e.Length);
             RunOnUi(RenderChapterMarkers); // 길이를 알아야 챕터 위치를 배치할 수 있음
         }
-
-        private void Player_PositionChanged(object? sender, MediaPlayerPositionChangedEventArgs e) =>
-            _cachedPosition = e.Position;
 
         private void Player_SeekableChanged(object? sender, MediaPlayerSeekableChangedEventArgs e) =>
             _cachedSeekable = e.Seekable != 0;
@@ -332,7 +359,6 @@ namespace OctoPlayer
         {
             _cachedState = VLCState.Stopped;
             Volatile.Write(ref _cachedTimeMs, 0);
-            _cachedPosition = 0f;
             RunOnUi(UpdatePlayPauseButton);
         }
 
@@ -455,7 +481,8 @@ namespace OctoPlayer
             };
             if (dialog.ShowDialog(this) == true)
             {
-                OpenPaths(dialog.FileNames, autoScanFolder: true);
+                // 폴더의 다른 파일도 함께 열지는 환경설정에서 선택합니다.
+                OpenPaths(dialog.FileNames, _settings.OpenFolderScan);
             }
         }
 
@@ -630,7 +657,6 @@ namespace OctoPlayer
             _lastTimerTimeMs = 0;
             Volatile.Write(ref _cachedTimeMs, 0);
             Volatile.Write(ref _cachedLengthMs, 0);
-            _cachedPosition = 0f;
             _cachedSeekable = false;
             _pendingSeekMs = -1;
             _chapters = Array.Empty<ChapterDescription>();
@@ -759,7 +785,6 @@ namespace OctoPlayer
                 _cachedState = VLCState.NothingSpecial;
                 Volatile.Write(ref _cachedTimeMs, 0);
                 Volatile.Write(ref _cachedLengthMs, 0);
-                _cachedPosition = 0f;
                 _cachedSeekable = false;
 
                 _ = Task.Run(() =>
@@ -797,11 +822,15 @@ namespace OctoPlayer
             {
                 _transitioning = false; // 재생이 시작됐으므로 대기 화면 억제 해제
 
-                if (resume > 0)
+                if (resume > 0 && _pendingSeekMs < 0)
                 {
-                    // 시크 가능 여부 확인과 시크 모두 입력 스레드를 기다릴 수 있어 백그라운드에서 수행합니다.
-                    MediaPlayer mp = _mediaPlayer;
-                    _ = Task.Run(() => { try { if (mp.IsSeekable) { mp.Time = resume; } } catch { } });
+                    // 시작 위치는 :start-time 옵션이 이미 처리하므로 여기서는 추적만 등록합니다.
+                    // start-time을 무시하는 포맷이면 UiTimer가 1초 뒤 실제 시크로 보정하고,
+                    // 사용자가 이미 다른 위치로 시크했다면(_pendingSeekMs 존재) 덮어쓰지 않습니다.
+                    _pendingSeekMs = resume;
+                    _pendingSeekUtc = DateTime.UtcNow;
+                    _seekRetryCount = 0;
+                    _lastTimerTimeMs = resume;
                 }
 
                 // 오디오 출력이 준비된 시점에 볼륨/음소거/속도/영상속성/팬스캔을 재적용합니다.
@@ -970,6 +999,14 @@ namespace OctoPlayer
         {
             if (_playlist.Current == null && _currentMedia == null)
             {
+                // 재생목록에 항목이 있으면(추가만 해 둔 상태) 첫 항목부터 재생합니다.
+                if (_playlist.Count > 0)
+                {
+                    _playlist.SelectByItemIndex(0);
+                    PlayCurrent();
+                    return;
+                }
+
                 Menu_OpenFile(null, new RoutedEventArgs());
                 return;
             }
@@ -2332,7 +2369,16 @@ namespace OctoPlayer
             SetPlayerTimeAsync(targetMs);
             _pendingSeekMs = targetMs;
             _pendingSeekUtc = DateTime.UtcNow;
+            _seekRetryCount = 0;
             _lastTimerTimeMs = targetMs; // 뒤로 시크가 반복 랩으로 오인되지 않게 기준점 갱신
+
+            // 일시정지 중에는 시크가 반영돼도 TimeChanged가 오지 않는 경우가 많아
+            // 캐시를 목표값으로 미리 맞춥니다. 그대로 두면 도착 판정이 4초간 실패하며
+            // 재시도를 반복하다가 진행바가 이전 위치로 되돌아가 보였습니다.
+            if (_cachedState == VLCState.Paused)
+            {
+                Volatile.Write(ref _cachedTimeMs, targetMs);
+            }
         }
 
         // 시크 요청 직렬화: 요청마다 Task.Run을 띄우면 스레드풀에서 실행 순서가 뒤집혀
@@ -2404,28 +2450,39 @@ namespace OctoPlayer
                 return;
             }
 
-            // 진행 중인 시크 유지: 도착했으면 종료, 무시된 것 같으면 재적용, 오래되면 포기.
+            // 진행 중인 시크 유지: 도착했으면 종료, 무시된 것 같으면 제한 횟수만 재적용.
+            // 허용 오차를 3초로 두는 이유: 키프레임 간격이 큰 파일은 목표에서 몇 초 떨어진
+            // 지점에 안착하는데, 오차를 좁게 잡으면 "미도착"으로 오인해 시크를 계속 재적용
+            // → 매번 키프레임으로 되돌아가 "원래 위치로 돌아가는" 현상이 됐습니다.
             if (_pendingSeekMs >= 0)
             {
                 double elapsed = (DateTime.UtcNow - _pendingSeekUtc).TotalMilliseconds;
 
-                if (time >= 0 && Math.Abs(time - _pendingSeekMs) <= 1500)
+                if (time >= 0 && Math.Abs(time - _pendingSeekMs) <= 3000)
                 {
-                    _pendingSeekMs = -1; // 목표 도착
+                    _pendingSeekMs = -1; // 목표(또는 그 근처 키프레임) 도착
                 }
-                else if (elapsed > 4000)
+                else if (elapsed > 1000)
                 {
-                    // 포기(시크 불가 구간 등). 느린 디스크에서 시크가 4초 이상 걸리는 경우는 드물어
-                    // 이 시간까지 재적용해야 시크가 조용히 사라져 원래 위치로 돌아가는 문제가 없습니다.
-                    // 일시정지 중에는 TimeChanged가 오지 않을 수 있어 목표값을 캐시에 반영해
-                    // 표시가 이전 위치로 되돌아가지 않게 합니다.
-                    Volatile.Write(ref _cachedTimeMs, _pendingSeekMs);
-                    _lastTimerTimeMs = _pendingSeekMs;
-                    _pendingSeekMs = -1;
-                }
-                else if (elapsed > 450)
-                {
-                    SetPlayerTimeAsync(_pendingSeekMs); // 무시된 요청 재적용
+                    if (_seekRetryCount < 2)
+                    {
+                        // 바쁜 순간(버퍼링/트랙 전환)에 무시된 요청 재적용.
+                        // 1초 간격 최대 2회로 제한해 진행 중인 시크를 계속 재시작하지 않습니다.
+                        _seekRetryCount++;
+                        _pendingSeekUtc = DateTime.UtcNow;
+                        SetPlayerTimeAsync(_pendingSeekMs);
+                    }
+                    else
+                    {
+                        // 포기: 일시정지 중에는 이벤트가 오지 않으므로 목표값을 캐시에 반영하고,
+                        // 재생 중에는 실제 위치를 그대로 따릅니다(억지로 목표를 표시하면 다시 튀어 보임).
+                        if (_cachedState == VLCState.Paused)
+                        {
+                            Volatile.Write(ref _cachedTimeMs, _pendingSeekMs);
+                            _lastTimerTimeMs = _pendingSeekMs;
+                        }
+                        _pendingSeekMs = -1;
+                    }
                 }
             }
 
@@ -2466,9 +2523,11 @@ namespace OctoPlayer
             if (len > 0)
             {
                 // 시크 반영 대기 중에는 목표 위치를 표시해 이전 위치로 되돌아가 보이는 현상을 막습니다.
+                // 시간 텍스트와 같은 캐시(_cachedTimeMs)를 쓰는 이유: 별도의 PositionChanged 캐시는
+                // 갱신 시점이 어긋나 시크 직후 진행바만 이전 위치로 잠깐 되돌아가는 원인이 됐습니다.
                 double fraction = _pendingSeekMs >= 0
                     ? _pendingSeekMs / (double)len
-                    : _cachedPosition;
+                    : Math.Clamp(time / (double)len, 0d, 1d);
 
                 _updatingUi = true;
                 SeekSlider.Value = Math.Clamp(fraction * SeekSlider.Maximum, 0, SeekSlider.Maximum);
@@ -2586,6 +2645,57 @@ namespace OctoPlayer
             MiPlDelete.IsEnabled = hasSelection;
             MiPlViewTitles.IsChecked = _playlistView == PlaylistViewMode.Titles;
             MiPlViewThumbs.IsChecked = _playlistView == PlaylistViewMode.Thumbnails;
+        }
+
+        private void PlaylistMenu_AddFiles(object? sender, RoutedEventArgs e)
+        {
+            var dialog = new Microsoft.Win32.OpenFileDialog
+            {
+                Title = Loc.T("S_OpenMediaTitle"),
+                Multiselect = true,
+                Filter = SupportedFormats.BuildOpenFileFilter()
+            };
+            if (dialog.ShowDialog(this) == true)
+            {
+                AddToPlaylist(dialog.FileNames);
+            }
+        }
+
+        private void PlaylistMenu_AddFolder(object? sender, RoutedEventArgs e)
+        {
+            var dialog = new Microsoft.Win32.OpenFolderDialog { Title = Loc.T("S_SelectFolderTitle") };
+            if (dialog.ShowDialog(this) == true)
+            {
+                AddToPlaylist(new[] { dialog.FolderName });
+            }
+        }
+
+        /// <summary>
+        /// 재생을 시작하지 않고 파일/폴더를 재생목록에만 추가합니다(폴더는 내용을 스캔).
+        /// 폴더 열람은 느린 디스크에서 오래 걸릴 수 있어 백그라운드에서 수행합니다.
+        /// </summary>
+        private async void AddToPlaylist(IEnumerable<string> paths)
+        {
+            var list = paths.Where(p => !string.IsNullOrWhiteSpace(p)).ToList();
+            if (list.Count == 0)
+            {
+                return;
+            }
+
+            (List<string> files, _) = await Task.Run(() => CollectPlayableFiles(list, autoScanFolder: false));
+
+            int added = 0;
+            foreach (string file in files)
+            {
+                if (_playlist.AddFile(file) != null)
+                {
+                    added++;
+                }
+            }
+
+            _playlist.ReshuffleIfNeeded();
+            RefreshPlaylist();
+            ShowToast(Loc.F("S_PlAddedToast", added));
         }
 
         private void PlaylistMenu_Remove(object? sender, RoutedEventArgs e)
@@ -2744,7 +2854,7 @@ namespace OctoPlayer
         {
             if (e.Data.GetData(DataFormats.FileDrop) is string[] paths)
             {
-                OpenPaths(paths, autoScanFolder: true);
+                OpenPaths(paths, _settings.OpenFolderScan);
             }
         }
 

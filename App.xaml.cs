@@ -10,6 +10,23 @@ namespace OctoPlayer
         {
             base.OnStartup(e);
 
+            // 설치 직후 인스톨러가 호출하는 숨김 모드: libVLC 플러그인 캐시(plugins.dat)를
+            // 미리 생성해 사용자의 첫 실행부터 빠르게 시작되도록 합니다. 창은 표시하지 않습니다.
+            if (e.Args.Length > 0 && e.Args[0] == "--gen-plugins-cache")
+            {
+                try
+                {
+                    LibVLCSharp.Shared.Core.Initialize();
+                    using var lib = new LibVLCSharp.Shared.LibVLC("--reset-plugins-cache");
+                }
+                catch
+                {
+                    // 캐시 생성 실패는 치명적이지 않습니다(첫 실행 시 앱이 다시 시도).
+                }
+                Shutdown();
+                return;
+            }
+
             // 시작 실패 진단용: 예외를 로그로 남기고 사용자에게 알립니다.
             DispatcherUnhandledException += (_, args) =>
             {

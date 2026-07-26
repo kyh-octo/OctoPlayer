@@ -55,6 +55,7 @@ namespace OctoPlayer
         private readonly TextBox _arrowSkipBox;
         private readonly TextBox _volumeStepBox;
         private readonly CheckBox _resumeBox;
+        private readonly CheckBox _openScanBox;
         private readonly CheckBox _rememberRateBox;
         private readonly CheckBox _autoSubBox;
         private readonly CheckBox _rememberSizeBox;
@@ -68,7 +69,7 @@ namespace OctoPlayer
         {
             _settings = settings;
             Title = Loc.T("S_SettingsTitle");
-            DialogTheme.Setup(this, 480, 760);
+            DialogTheme.Setup(this, 480, 790);
 
             var root = new StackPanel { Margin = new Thickness(20, 12, 20, 0) };
 
@@ -125,6 +126,7 @@ namespace OctoPlayer
             // ----- 재생 -----
             root.Children.Add(Section(Loc.T("S_SecPlayback")));
             _resumeBox = CheckRow(Loc.T("S_ResumeOpt"), settings.ResumePlayback);
+            _openScanBox = CheckRow(Loc.T("S_OpenScanOpt"), settings.OpenFolderScan);
             _rememberRateBox = CheckRow(Loc.T("S_RememberRateOpt"), settings.RememberRate);
 
             // ----- 자막 -----
@@ -276,6 +278,7 @@ namespace OctoPlayer
             _settings.ArrowSkipSeconds = ParseClamped(_arrowSkipBox, _settings.ArrowSkipSeconds, 1, 600);
             _settings.WheelVolumeStep = ParseClamped(_volumeStepBox, _settings.WheelVolumeStep, 1, 50);
             _settings.ResumePlayback = _resumeBox.IsChecked == true;
+            _settings.OpenFolderScan = _openScanBox.IsChecked == true;
             _settings.RememberRate = _rememberRateBox.IsChecked == true;
             _settings.AutoLoadSubtitles = _autoSubBox.IsChecked == true;
             _settings.RememberWindowSize = _rememberSizeBox.IsChecked == true;

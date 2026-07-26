@@ -347,6 +347,12 @@
                 <Setter Property="Padding" Value="6,4"/>
             </Style>
 
+            <!-- 기본 템플릿의 검정 글자가 다크 배경에서 보이지 않아 글자색만 지정합니다. -->
+            <Style TargetType="RadioButton">
+                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                <Setter Property="VerticalContentAlignment" Value="Center"/>
+            </Style>
+
             <Style TargetType="CheckBox">
                 <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
                 <Setter Property="VerticalContentAlignment" Value="Center"/>
