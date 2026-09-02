@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <UseWPF>true</UseWPF>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <ApplicationIcon>Properties\OctoPlayer.ico</ApplicationIcon>
     <!-- 설치 파일 작업 폴더(게시 결과물 수천 개)가 프로젝트 빌드에 포함되지 않도록 제외 -->
     <DefaultItemExcludes>$(DefaultItemExcludes);Setup\**</DefaultItemExcludes>
