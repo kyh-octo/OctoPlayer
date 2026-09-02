@@ -38,6 +38,10 @@ namespace OctoPlayer
 
         private bool _loaded;
         private bool _isSeeking;
+
+        // 트랙 클릭으로 시작된 드래그: Slider가 이미 값을 옮겨 놓았으므로 놓을 때 반드시 시크합니다.
+        private bool _seekOnDragEnd;
+        private double _dragStartValue;
         private bool _updatingUi;
         private bool _isFullscreen;
 
@@ -63,6 +67,21 @@ namespace OctoPlayer
         private long _pendingSeekMs = -1;
         private DateTime _pendingSeekUtc;
         private int _seekRetryCount;
+        private long _seekFromMs = -1; // 시크 요청 시점의 실제 위치(드롭/안착 판별용)
+
+        // 시크 요청 이후 입력 스레드가 보내온 TimeChanged 개수(에코 제외).
+        // 0이면 아직 시크 결과가 하나도 안 왔다는 뜻이라 도착/무시 판정을 미룹니다.
+        private int _seekEventsSinceRequest;
+
+        // libvlc_media_player_set_time은 실제 이동이 시작되기도 전에, 호출한 스레드에서
+        // "목표 시간"을 담은 TimeChanged를 동기적으로 되울립니다(에코). 이를 도착으로 오인하면
+        // pending이 즉시 풀리고, 뒤이어 입력 스레드가 보내는 "이동 전" 시간이 캐시를 덮어써
+        // 진행바/시간 표시가 이전 위치로 잠시 되돌아가 보입니다. 워커 스레드 ID로 에코를 걸러냅니다.
+        private int _seekWorkerThreadId = -1;          // 시크 워커가 mp.Time을 설정하는 동안의 스레드 ID(에코 판별용)
+        private long _lastSeekTargetMs = -1;           // 마지막으로 요청한 시크 목표
+        private DateTime _lastSeekIssuedUtc = DateTime.MinValue;
+        private float _cachedBufferingPct = 100f;      // Buffering 이벤트(0~100): 시크 후 프리롤 진행률
+        private DateTime _lastBufferingUtc = DateTime.MinValue;
         private Rect _restoreBounds;
         private int _rotation;
         private int _playerRotation;
@@ -70,9 +89,24 @@ namespace OctoPlayer
         private bool _applyingSettings;
         private long _resumeAtMs;
 
+        // :start-time을 쓰지 못한 이어보기(반복 재생과 병용 불가)를 Playing 시점에 실제 시크로 처리할지 여부.
+        private volatile bool _resumeNeedsSeek;
+
+        // 다음에 열릴 미디어용 예약값. Play() 직전에 여기에 담고 Opening에서 위 필드로 옮깁니다.
+        // (Play 전에 바로 넣으면 이전 미디어의 늦은 Playing이 먼저 소비해 버립니다.)
+        private long _nextResumeAtMs;
+        private volatile bool _nextResumeNeedsSeek;
+
         private float _playbackRate = 1f;
         private bool _isMuted;
         private int _lastSpu = -1;
+
+        // 사용자가 선택한 자막 켬/끔 상태. 트랙이 바뀌어도, 앱을 다시 켜도 유지됩니다(설정에 저장).
+        private bool _subtitlesEnabled = true;
+
+        // 새로 시작한 미디어의 첫 Playing 이벤트인지 구분합니다. libVLC는 일시정지 해제 시에도
+        // Playing을 다시 발생시키므로, 이 값이 없으면 꺼 둔 자막이 일시정지 해제마다 되살아납니다.
+        private volatile bool _awaitingFirstPlaying;
 
         // 구간 반복(A-B)
         private long _abStartMs = -1;
@@ -124,6 +158,15 @@ namespace OctoPlayer
 
             InitializeComponent();
 
+            // 시크바 입력은 handledEventsToo로 직접 등록합니다. MediaSlider는
+            // IsMoveToPointEnabled=True라서, 썸이 아닌 트랙을 누르면 Slider의 클래스 핸들러가
+            // 값을 옮기고 e.Handled=true로 만들어 XAML에 건 PreviewMouseDown이 아예 실행되지
+            // 않았습니다(→ _isSeeking이 false로 남아 타이머가 값을 덮어써 되감김).
+            SeekSlider.AddHandler(UIElement.PreviewMouseLeftButtonDownEvent,
+                new MouseButtonEventHandler(SeekSlider_PreviewLeftButtonDown), handledEventsToo: true);
+            SeekSlider.AddHandler(Thumb.DragStartedEvent, new DragStartedEventHandler(SeekSlider_DragStarted), handledEventsToo: true);
+            SeekSlider.AddHandler(Thumb.DragCompletedEvent, new DragCompletedEventHandler(SeekSlider_DragCompleted), handledEventsToo: true);
+
             _thumbnails = new ThumbnailCache(96, 54, OnThumbnailReady);
 
             // 창을 즉시 표시하기 위해 libVLC 생성은 Loaded 이후 백그라운드로 미룹니다.
@@ -131,6 +174,18 @@ namespace OctoPlayer
             ContentArea.IsEnabled = false;
 
             PlaylistList.ItemsSource = _entries;
+
+            // 재생목록 패널은 창/전체화면 전환 시 부모가 바뀌고(MoveOverlaysTo*), 표시/숨김도
+            // Visibility로 처리합니다. 그때마다 가상화 ListBox의 스크롤 위치가 맨 위로 초기화되므로
+            // 패널이 다시 보일 때마다 현재 재생 항목으로 스크롤을 되돌립니다.
+            PlaylistPanel.IsVisibleChanged += (_, args) =>
+            {
+                if (args.NewValue is true)
+                {
+                    // 레이아웃이 끝난 뒤에 스크롤해야 가상화 패널이 실제 위치를 계산할 수 있습니다.
+                    Dispatcher.BeginInvoke(DispatcherPriority.Loaded, ScrollPlaylistToCurrent);
+                }
+            };
 
             // 창 모드 기본 배치: 재생목록/컨트롤바를 영상과 겹치지 않는 별도 칸으로 이동합니다.
             // (XAML에서는 전체화면 오버레이 위치(OverlayRoot)에 선언되어 있습니다.)
@@ -220,7 +275,7 @@ namespace OctoPlayer
             // 이어보기용 마지막 위치 저장 (5초 이상 재생했고 거의 끝이 아닐 때만)
             if (_settings.ResumePlayback && _playlist.Current != null)
             {
-                long time = Volatile.Read(ref _cachedTimeMs);
+                long time = IntendedTimeMs();
                 long length = Volatile.Read(ref _cachedLengthMs);
                 if (time > 5000 && (length <= 0 || length - time > 10000))
                 {
@@ -316,8 +371,10 @@ namespace OctoPlayer
             mp.Opening += Player_Opening;
             mp.EncounteredError += Player_EncounteredError;
             mp.TimeChanged += Player_TimeChanged;
+            mp.Buffering += Player_Buffering;
             mp.LengthChanged += Player_LengthChanged;
             mp.SeekableChanged += Player_SeekableChanged;
+            mp.ESSelected += Player_ESSelected;
         }
 
         private void UnsubscribePlayerEvents(MediaPlayer mp)
@@ -329,14 +386,31 @@ namespace OctoPlayer
             mp.Opening -= Player_Opening;
             mp.EncounteredError -= Player_EncounteredError;
             mp.TimeChanged -= Player_TimeChanged;
+            mp.Buffering -= Player_Buffering;
             mp.LengthChanged -= Player_LengthChanged;
             mp.SeekableChanged -= Player_SeekableChanged;
+            mp.ESSelected -= Player_ESSelected;
         }
 
         // ----- 상태 캐시 갱신 (libVLC 스레드에서 호출되므로 필드 기록만 합니다) -----
 
-        private void Player_TimeChanged(object? sender, MediaPlayerTimeChangedEventArgs e) =>
+        private void Player_TimeChanged(object? sender, MediaPlayerTimeChangedEventArgs e)
+        {
+            // set_time은 실제 이동 전에 목표 시간을 담은 TimeChanged를 호출 스레드에서 동기적으로 에코합니다.
+            // 이를 도착으로 오인하면 pending이 풀려 이후 도착하는 "이동 전" 시간이 UI를 이전 위치로 되돌립니다.
+            if (Environment.CurrentManagedThreadId == Volatile.Read(ref _seekWorkerThreadId))
+            {
+                return;
+            }
+            Interlocked.Increment(ref _seekEventsSinceRequest); // 진짜 입력 스레드 이벤트만 셉니다
             Volatile.Write(ref _cachedTimeMs, e.Time);
+        }
+
+        private void Player_Buffering(object? sender, MediaPlayerBufferingEventArgs e)
+        {
+            _cachedBufferingPct = e.Cache;
+            _lastBufferingUtc = DateTime.UtcNow;
+        }
 
         private void Player_LengthChanged(object? sender, MediaPlayerLengthChangedEventArgs e)
         {
@@ -347,7 +421,31 @@ namespace OctoPlayer
         private void Player_SeekableChanged(object? sender, MediaPlayerSeekableChangedEventArgs e) =>
             _cachedSeekable = e.Seekable != 0;
 
-        private void Player_Opening(object? sender, EventArgs e) => _cachedState = VLCState.Opening;
+        private void Player_Opening(object? sender, EventArgs e)
+        {
+            _cachedState = VLCState.Opening;
+
+            // 예약해 둔 이어보기/첫 Playing 표시를 여기서 실제 상태로 옮깁니다.
+            // Opening은 새 미디어에 대해서만, 그리고 Playing보다 먼저 발생하므로
+            // 이전 미디어의 늦은 Playing이 이 값들을 소비할 수 없습니다.
+            // (Stop 뒤의 Play()도 Opening을 다시 발생시키므로 자막 상태/챕터 처리가 되살아납니다.)
+            _awaitingFirstPlaying = true;
+            _resumeAtMs = Interlocked.Exchange(ref _nextResumeAtMs, 0);
+            _resumeNeedsSeek = _nextResumeNeedsSeek;
+            _nextResumeNeedsSeek = false;
+        }
+
+        private void Player_ESSelected(object? sender, MediaPlayerESSelectedEventArgs e)
+        {
+            // 자막을 꺼 둔 상태에서 libVLC가 자막 트랙을 자동 선택하면(뒤늦게 추가된 내장/외부 자막) 즉시 다시 끕니다.
+            if (e.Type == TrackType.Text && e.Id != -1 && !_subtitlesEnabled)
+            {
+                // 옛 플레이어의 늦은 이벤트는 RecreatePlayerAsync의 UnsubscribePlayerEvents가 이미 막으므로
+                // 여기서는 발신자를 확인하지 않습니다(LibVLCSharp은 sender로 MediaPlayer가 아닌 내부
+                // 이벤트 매니저를 넘겨 주어, 발신자 비교는 항상 실패하는 죽은 코드였습니다).
+                RunOnUi(() => { if (!_subtitlesEnabled && _mediaPlayer != null && _mediaPlayer.Spu != -1) { _mediaPlayer.SetSpu(-1); UpdateSubtitleButton(); } });
+            }
+        }
 
         private void Player_Paused(object? sender, EventArgs e)
         {
@@ -381,6 +479,7 @@ namespace OctoPlayer
             {
                 _playlist.RepeatMode = _settings.RepeatMode;
                 _playlist.SetShuffle(_settings.IsShuffled);
+                _subtitlesEnabled = _settings.SubtitlesEnabled;
                 _repeatCount = Math.Clamp(_settings.RepeatCount, 1, 99);
                 RepeatCountButton.Content = $"×{_repeatCount}";
 
@@ -455,6 +554,7 @@ namespace OctoPlayer
             _settings.PlaylistWidth = (int)PlaylistPanel.Width;
             _settings.PlaylistView = _playlistView;
             _settings.LastRate = _playbackRate;
+            _settings.SubtitlesEnabled = _subtitlesEnabled;
 
             // 창 크기(일반 상태일 때만; 전체화면/최대화 크기는 저장하지 않음)
             if (!_isFullscreen && WindowState == WindowState.Normal
@@ -504,6 +604,8 @@ namespace OctoPlayer
             }
 
             var media = new Media(_libVlc, url, FromType.FromLocation);
+            Interlocked.Exchange(ref _nextResumeAtMs, 0); // 스트림은 이어보기 없음(예약값 초기화)
+            _nextResumeNeedsSeek = false;
             _mediaPlayer.Play(media);
             _currentMedia?.Dispose();
             _currentMedia = media;
@@ -603,7 +705,12 @@ namespace OctoPlayer
 
         private void PlayCurrent()
         {
-            _rotation = 0;
+            // 트랙을 바꾸면 구간 반복(A-B)은 해제합니다(이전 파일 기준의 구간이라 새 파일에서는 무의미).
+            // 회전은 StartPlayback을 직접 호출하므로 이 해제의 영향을 받지 않고 유지됩니다.
+            _abStartMs = _abEndMs = -1;
+
+            // 회전은 다음 파일로 넘어가도 유지합니다(같은 방향으로 찍힌 영상이 이어지는 경우가 많음).
+            // 설정에는 저장하지 않으므로 앱을 다시 시작하면 0도로 돌아갑니다.
             StartPlayback();
         }
 
@@ -659,6 +766,9 @@ namespace OctoPlayer
             Volatile.Write(ref _cachedLengthMs, 0);
             _cachedSeekable = false;
             _pendingSeekMs = -1;
+            _seekFromMs = -1;
+            _cachedBufferingPct = 100f;
+            _lastSeekTargetMs = -1;
             _chapters = Array.Empty<ChapterDescription>();
             ChapterMarkerCanvas.Children.Clear();
 
@@ -669,7 +779,14 @@ namespace OctoPlayer
             bool autoSubs = _settings.AutoLoadSubtitles;
             string filePath = item.FilePath;
             long startMs = startTimeMs;
-            _resumeAtMs = startTimeMs;
+
+            // 이어보기 값은 예약만 해 두고 새 미디어의 Opening에서 적용합니다(위 _nextResumeAtMs 참조).
+            Interlocked.Exchange(ref _nextResumeAtMs, startTimeMs);
+
+            // :start-time과 :input-repeat은 함께 쓰면 안 됩니다. VLC는 반복할 때마다 start-time을 다시
+            // 적용해, 반복이 0초가 아니라 이어보기 지점부터 시작됩니다. 반복 중에는 Playing 뒤 실제 시크로 대체합니다.
+            bool useStartTimeOption = startMs > 0 && !loopForever && repeatCount <= 1;
+            _nextResumeNeedsSeek = startMs > 0 && !useStartTimeOption;
 
             // 명시적 Stop() 없이 바로 새 미디어로 전환합니다. Stop을 먼저 호출하면 비디오 출력이
             // 완전히 파괴됐다가 재생성되어 트랙 전환 시 검은 화면이 길게 보입니다.
@@ -704,7 +821,7 @@ namespace OctoPlayer
                         m.AddOption($":input-repeat={repeatCount - 1}");
                     }
 
-                    if (startMs > 0)
+                    if (useStartTimeOption)
                     {
                         double seconds = startMs / 1000.0;
                         m.AddOption($":start-time={seconds.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
@@ -818,6 +935,11 @@ namespace OctoPlayer
             long resume = _resumeAtMs;
             _resumeAtMs = 0;
 
+            // libVLC는 일시정지 해제 때도 Playing을 발생시키므로, 미디어 시작 시에만 해야 하는
+            // 작업(자막 상태 적용/챕터 읽기)은 첫 Playing에서만 수행합니다.
+            bool firstPlaying = _awaitingFirstPlaying;
+            _awaitingFirstPlaying = false;
+
             RunOnUi(() =>
             {
                 _transitioning = false; // 재생이 시작됐으므로 대기 화면 억제 해제
@@ -830,7 +952,24 @@ namespace OctoPlayer
                     _pendingSeekMs = resume;
                     _pendingSeekUtc = DateTime.UtcNow;
                     _seekRetryCount = 0;
+                    Volatile.Write(ref _seekEventsSinceRequest, 0);
                     _lastTimerTimeMs = resume;
+
+                    // 시크 전 기준 위치가 없으면 키프레임 차이로 안착한 경우가 "무시됨"으로 오인되어
+                    // 재시크가 두 번 더 나갑니다. 지금 위치를 기준으로 남겨 둡니다.
+                    _seekFromMs = Volatile.Read(ref _cachedTimeMs);
+
+                    // 반복 재생이라 :start-time을 쓰지 못한 경우에는 여기서 실제로 시크합니다
+                    // (start-time을 넣었다면 반복마다 이어보기 지점으로 되돌아갔을 것).
+                    // ApplySeek은 쓸 수 없습니다. 아직 LengthChanged 전이라 _cachedLengthMs가 0이고,
+                    // 거기에 맞춰 목표가 0으로 잘려 처음부터 재생됩니다.
+                    if (_resumeNeedsSeek)
+                    {
+                        _resumeNeedsSeek = false;
+                        _lastSeekTargetMs = resume;
+                        _lastSeekIssuedUtc = DateTime.UtcNow;
+                        SetPlayerTimeAsync(resume);
+                    }
                 }
 
                 // 오디오 출력이 준비된 시점에 볼륨/음소거/속도/영상속성/팬스캔을 재적용합니다.
@@ -844,14 +983,14 @@ namespace OctoPlayer
                 ApplyPanScan();
                 ApplyAspect();
 
-                if (_mediaPlayer.Spu == -1 && _mediaPlayer.SpuCount > 0)
+                if (firstPlaying)
                 {
-                    SelectFirstSubtitleTrack();
+                    ApplySubtitlePreference();
+                    LoadChaptersAsync(); // 챕터는 미디어 시작 시 한 번만 읽습니다(일시정지 해제마다 다시 읽을 필요 없음)
                 }
 
                 UpdatePlayPauseButton();
                 UpdateSubtitleButton();
-                LoadChaptersAsync();
             });
         }
 
@@ -953,7 +1092,9 @@ namespace OctoPlayer
 
             // 무한 반복이어야 하는데 자연 종료가 온 경우(내부 반복 미적용 미디어 등)의 안전망: 재시작.
             // 반복 횟수는 :input-repeat 옵션으로 VLC가 이미 N회 재생을 마쳤으므로 여기서는 진행만 합니다.
-            if (WantsInfiniteLoop())
+            // 현재 항목이 없으면(목록에서 제거된 파일을 재생 중) StartPlayback이 아무것도 하지 않아
+            // 재생이 조용히 멈추므로, 그 경우에는 아래의 다음 항목 진행으로 넘깁니다.
+            if (WantsInfiniteLoop() && _playlist.Current != null)
             {
                 StartPlayback();
                 return;
@@ -997,7 +1138,9 @@ namespace OctoPlayer
 
         internal void TogglePlayPause()
         {
-            if (_playlist.Current == null && _currentMedia == null)
+            // 현재 항목이 없고 재생할 미디어도 없거나 이미 끝난 경우: 재개할 대상이 없으므로
+            // 목록의 첫 항목이나 파일 열기로 넘깁니다(그대로 두면 Space가 아무 반응도 하지 않습니다).
+            if (_playlist.Current == null && (_currentMedia == null || _cachedState is VLCState.Ended or VLCState.Error))
             {
                 // 재생목록에 항목이 있으면(추가만 해 둔 상태) 첫 항목부터 재생합니다.
                 if (_playlist.Count > 0)
@@ -1043,7 +1186,7 @@ namespace OctoPlayer
 
         internal void PlayPreviousManual()
         {
-            if (Volatile.Read(ref _cachedTimeMs) > 3000)
+            if (IntendedTimeMs() > 3000)
             {
                 ApplySeek(0);
                 return;
@@ -1082,7 +1225,7 @@ namespace OctoPlayer
 
         private void Menu_AbSetA(object? sender, RoutedEventArgs e)
         {
-            _abStartMs = Volatile.Read(ref _cachedTimeMs);
+            _abStartMs = IntendedTimeMs();
             if (_abEndMs <= _abStartMs)
             {
                 _abEndMs = -1;
@@ -1092,7 +1235,7 @@ namespace OctoPlayer
 
         private void Menu_AbSetB(object? sender, RoutedEventArgs e)
         {
-            long now = Volatile.Read(ref _cachedTimeMs);
+            long now = IntendedTimeMs();
             if (_abStartMs < 0 || now <= _abStartMs)
             {
                 ShowToast(Loc.T("S_AbNeedA"));
@@ -1201,6 +1344,11 @@ namespace OctoPlayer
                 return;
             }
 
+            // 사용자가 직접 자막 파일을 열었으므로 자막을 켠 것으로 기록합니다
+            // (이미 붙어 있어 트랙만 다시 선택하는 경우에도 동일하게 적용되어야 합니다).
+            _subtitlesEnabled = true;
+            SaveSettings();
+
             if (_attachedSubtitles.Contains(dialog.FileName))
             {
                 if (_mediaPlayer.Spu == -1)
@@ -1231,14 +1379,21 @@ namespace OctoPlayer
 
         private void Menu_ToggleSubtitles(object? sender, RoutedEventArgs e)
         {
-            if (_mediaPlayer.Spu != -1)
+            // 메뉴 체크 표시와 같은 값(_subtitlesEnabled)으로 판단합니다. 트랙이 아직 준비되지 않아
+            // Spu가 -1인데 설정은 켬인 상태에서 Spu로 판단하면 토글 방향이 거꾸로 동작했습니다.
+            if (_subtitlesEnabled)
             {
-                _lastSpu = _mediaPlayer.Spu;
+                if (_mediaPlayer.Spu != -1)
+                {
+                    _lastSpu = _mediaPlayer.Spu;
+                }
+                _subtitlesEnabled = false; // 사용자가 직접 끈 상태이므로 다음 파일/다음 실행에도 유지합니다.
                 _mediaPlayer.SetSpu(-1);
                 ShowToast(Loc.T("S_SubHidden"));
             }
             else
             {
+                _subtitlesEnabled = true;
                 bool restored = false;
                 foreach (TrackDescription t in _mediaPlayer.SpuDescription)
                 {
@@ -1256,6 +1411,22 @@ namespace OctoPlayer
                 ShowToast(_mediaPlayer.Spu != -1 ? Loc.T("S_SubShown") : Loc.T("S_SubNone"));
             }
 
+            UpdateSubtitleButton();
+            SaveSettings();
+        }
+
+        /// <summary>저장된 자막 켬/끔 상태를 현재 미디어에 적용합니다(미디어 시작 시, 그리고 트랙이 뒤늦게 자동 선택될 때).</summary>
+        private void ApplySubtitlePreference()
+        {
+            if (_mediaPlayer == null) return;
+            if (_subtitlesEnabled)
+            {
+                if (_mediaPlayer.Spu == -1 && _mediaPlayer.SpuCount > 0) SelectFirstSubtitleTrack();
+            }
+            else if (_mediaPlayer.Spu != -1)
+            {
+                _mediaPlayer.SetSpu(-1);
+            }
             UpdateSubtitleButton();
         }
 
@@ -1328,7 +1499,7 @@ namespace OctoPlayer
                 return;
             }
 
-            long resumeAt = Volatile.Read(ref _cachedTimeMs);
+            long resumeAt = IntendedTimeMs();
             _rotation = (_rotation + 90) % 360;
             StartPlayback(resumeAt);
             ShowToast(Loc.F("S_RotateToast", _rotation));
@@ -1505,8 +1676,9 @@ namespace OctoPlayer
             MiSubTracks.Items.Clear();
             int current = _mediaPlayer.Spu;
 
+            // 메뉴에서 고른 자막 상태도 사용자의 의사이므로 저장해 다음 파일/다음 실행에 유지합니다.
             var off = new MenuItem { Header = Loc.T("S_SubOff"), IsChecked = current == -1 };
-            off.Click += (_, _) => { _mediaPlayer.SetSpu(-1); UpdateSubtitleButton(); };
+            off.Click += (_, _) => { _subtitlesEnabled = false; SaveSettings(); _mediaPlayer.SetSpu(-1); UpdateSubtitleButton(); };
             MiSubTracks.Items.Add(off);
 
             foreach (TrackDescription track in _mediaPlayer.SpuDescription)
@@ -1518,7 +1690,7 @@ namespace OctoPlayer
 
                 var item = new MenuItem { Header = track.Name ?? Loc.F("S_Track", track.Id), IsChecked = track.Id == current };
                 int id = track.Id;
-                item.Click += (_, _) => { _mediaPlayer.SetSpu(id); UpdateSubtitleButton(); };
+                item.Click += (_, _) => { _subtitlesEnabled = true; SaveSettings(); _mediaPlayer.SetSpu(id); UpdateSubtitleButton(); };
                 MiSubTracks.Items.Add(item);
             }
         }
@@ -1952,7 +2124,7 @@ namespace OctoPlayer
             PlaylistItem? item = _playlist.Current;
             sb.AppendLine($"{Loc.T("S_InfoFile")}: {item?.FilePath ?? Loc.T("S_InfoNone")}");
             sb.AppendLine($"{Loc.T("S_InfoLength")}: {FormatTime(Volatile.Read(ref _cachedLengthMs))}");
-            sb.AppendLine($"{Loc.T("S_InfoPos")}: {FormatTime(Volatile.Read(ref _cachedTimeMs))}");
+            sb.AppendLine($"{Loc.T("S_InfoPos")}: {FormatTime(IntendedTimeMs())}");
             sb.AppendLine($"{Loc.T("S_InfoSpeed")}: {_playbackRate:0.##}x");
             sb.AppendLine();
 
@@ -2007,7 +2179,8 @@ namespace OctoPlayer
 
         private void MainMenu_Opened(object? sender, RoutedEventArgs e)
         {
-            MiSubVisible.IsChecked = _mediaPlayer.Spu != -1;
+            // 사용자가 선택한 상태를 그대로 보여 줍니다(Spu는 트랙 준비 전이면 아직 -1일 수 있음).
+            MiSubVisible.IsChecked = _subtitlesEnabled;
             MiMute.IsChecked = _isMuted;
             MiPlaylist.IsChecked = PlaylistPanel.Visibility == Visibility.Visible;
             MiFullscreen.IsChecked = _isFullscreen;
@@ -2142,8 +2315,21 @@ namespace OctoPlayer
             }
 
             // 진행 중인 시크가 있으면 그 목표를 기준으로 누적(연타 시 정확한 상대 이동)
-            long baseMs = _pendingSeekMs >= 0 ? _pendingSeekMs : Volatile.Read(ref _cachedTimeMs);
-            ApplySeek(baseMs + deltaMs);
+            ApplySeek(IntendedTimeMs() + deltaMs);
+        }
+
+        /// <summary>시크가 아직 반영되지 않았을 때는 사용자가 의도한 위치를 현재 위치로 취급합니다.</summary>
+        private long IntendedTimeMs()
+        {
+            if (_pendingSeekMs >= 0)
+            {
+                return _pendingSeekMs;
+            }
+            if (_lastSeekTargetMs >= 0 && (DateTime.UtcNow - _lastSeekIssuedUtc).TotalMilliseconds < 1500)
+            {
+                return _lastSeekTargetMs; // 직전 시크 직후에는 캐시가 아직 이전 위치일 수 있어 목표를 씁니다
+            }
+            return Volatile.Read(ref _cachedTimeMs);
         }
 
         // =====================================================================
@@ -2165,7 +2351,14 @@ namespace OctoPlayer
         {
             // Preview(터널링) 단계에서 처리해 자식 컨트롤이 이벤트를 소비해도 항상 실행됩니다.
             // 오버레이 창 클릭으로 키보드 포커스가 떠나지 않도록 메인 창을 다시 활성화합니다.
-            Dispatcher.BeginInvoke(() => Activate());
+            Dispatcher.BeginInvoke(() =>
+            {
+                // 드래그 중(캡처 보유)에 창 활성화를 바꾸면 캡처가 끊길 수 있어 놓은 뒤(PreviewMouseUp)에 활성화합니다.
+                if (Mouse.Captured == null && !IsActive)
+                {
+                    Activate();
+                }
+            });
 
             if (e.ChangedButton == MouseButton.XButton1)
             {
@@ -2175,6 +2368,11 @@ namespace OctoPlayer
             {
                 TrySideButtonSkip(+1);
             }
+        }
+
+        private void OverlayRoot_PreviewMouseUp(object sender, MouseButtonEventArgs e)
+        {
+            Dispatcher.BeginInvoke(() => { if (!IsActive) { Activate(); } });
         }
 
         private void TrySideButtonSkip(int direction)
@@ -2235,6 +2433,13 @@ namespace OctoPlayer
             Mouse.OverrideCursor = null;
             _idleTimer.Stop();
             _idleTimer.Start();
+
+            // 시크바(또는 볼륨) 드래그 중에는 컨트롤바를 자동으로 숨기지 않습니다.
+            // 숨기면 WPF가 마우스 캡처를 놓아 드래그가 취소됩니다.
+            if (_isSeeking || SeekSlider.IsMouseCaptureWithin || VolumeSlider.IsMouseCaptureWithin)
+            {
+                return;
+            }
 
             if (!_isFullscreen)
             {
@@ -2328,10 +2533,74 @@ namespace OctoPlayer
         // 시크바 / 타이머
         // =====================================================================
 
-        private void SeekSlider_PreviewMouseDown(object? sender, MouseButtonEventArgs e)
+        private void SeekSlider_PreviewLeftButtonDown(object? sender, MouseButtonEventArgs e)
         {
+            // e.Handled 대신 Thumb.IsMouseOver로 판별해 상위 핸들러가 Handled를 설정해도 오판하지 않습니다.
+            Track? track = SeekSlider.Template?.FindName("PART_Track", SeekSlider) as Track;
+            bool onThumb = track?.Thumb != null && track.Thumb.IsMouseOver;
+
+            if (onThumb)
+            {
+                // 썸 위를 누름: Thumb가 마우스를 캡처하고 DragStarted/DragCompleted로 이어집니다.
+                _isSeeking = true;
+                _seekOnDragEnd = false;
+                _dragStartValue = SeekSlider.Value;
+                return;
+            }
+
+            // 트랙 클릭(IsMoveToPointEnabled): Slider 클래스 핸들러가 이미 값을 클릭 지점으로 옮겼습니다.
+            // 같은 누름을 썸 드래그로 이어 주어 "누른 채 끌기"도 동작하게 하고, 시크는 놓을 때(DragCompleted) 한 번만 적용합니다.
+            _seekOnDragEnd = true;
+            _dragStartValue = SeekSlider.Value;
+            UpdateSeekLabel(_dragStartValue); // 썸은 이미 옮겨졌으므로 시간 표시도 함께 맞춥니다
+
+            if (track != null && track.Thumb != null)
+            {
+                _isSeeking = true;
+                track.Thumb.UpdateLayout();
+                track.Thumb.RaiseEvent(new MouseButtonEventArgs(e.MouseDevice, e.Timestamp, MouseButton.Left)
+                {
+                    RoutedEvent = UIElement.MouseLeftButtonDownEvent,
+                    Source = track.Thumb
+                });
+                if (track.Thumb.IsDragging)
+                {
+                    return; // DragCompleted에서 적용
+                }
+                _isSeeking = false;
+            }
+
+            ApplySeekFromSlider(); // 드래그로 이어지지 않으면 즉시 적용(타이머가 값을 덮어쓰기 전에)
+        }
+
+        private void SeekSlider_DragStarted(object? sender, DragStartedEventArgs e)
+        {
+            // 진행 중인 시크 추적은 지우지 않습니다. 썸을 누르기만 하고 움직이지 않으면 시크가 없는데,
+            // 추적을 지우면 아직 도착하지 않은 시크가 방치되어 이전 위치로 되돌아가 보입니다.
+            // (새 시크는 ApplySeek이 목표를 갈아끼우고, 드래그 중에는 _isSeeking 조기 반환이 타이머를 막습니다.)
             _isSeeking = true;
-            _pendingSeekMs = -1; // 새 조작이 시작되면 이전 시크 추적은 취소
+        }
+
+        /// <summary>드래그 종료(캡처 상실로 취소된 경우 포함)에 마지막 값을 적용합니다.</summary>
+        private void SeekSlider_DragCompleted(object? sender, DragCompletedEventArgs e)
+        {
+            bool moved = Math.Abs(SeekSlider.Value - _dragStartValue) > 0.01;
+            if (_seekOnDragEnd || moved)
+            {
+                ApplySeekFromSlider();
+            }
+            // 썸을 눌렀다가 움직이지 않고 놓은 경우는 시크하지 않습니다(현재 위치로의 no-op 시크도 이전 키프레임으로 되돌릴 수 있음).
+            _isSeeking = false;
+            _seekOnDragEnd = false;
+        }
+
+        private void ApplySeekFromSlider()
+        {
+            long length = Volatile.Read(ref _cachedLengthMs);
+            if (length > 0)
+            {
+                ApplySeek((long)(SeekSlider.Value / SeekSlider.Maximum * length));
+            }
         }
 
         private void SeekSlider_ValueChanged(object? sender, RoutedPropertyChangedEventArgs<double> e)
@@ -2341,21 +2610,17 @@ namespace OctoPlayer
                 return;
             }
 
+            UpdateSeekLabel(e.NewValue);
+        }
+
+        /// <summary>시크바 위치에 해당하는 시간을 현재 시간 표시에 반영합니다(조작 중 즉시 피드백).</summary>
+        private void UpdateSeekLabel(double sliderValue)
+        {
             long len = Volatile.Read(ref _cachedLengthMs);
             if (len > 0)
             {
-                CurrentTimeText.Text = FormatTime((long)(e.NewValue / SeekSlider.Maximum * len));
+                CurrentTimeText.Text = FormatTime((long)(sliderValue / SeekSlider.Maximum * len));
             }
-        }
-
-        private void SeekSlider_PreviewMouseUp(object? sender, MouseButtonEventArgs e)
-        {
-            long length = Volatile.Read(ref _cachedLengthMs);
-            if (length > 0)
-            {
-                ApplySeek((long)(SeekSlider.Value / SeekSlider.Maximum * length));
-            }
-            _isSeeking = false;
         }
 
         /// <summary>
@@ -2369,8 +2634,15 @@ namespace OctoPlayer
             SetPlayerTimeAsync(targetMs);
             _pendingSeekMs = targetMs;
             _pendingSeekUtc = DateTime.UtcNow;
+            _lastSeekTargetMs = targetMs;
+            _lastSeekIssuedUtc = DateTime.UtcNow;
             _seekRetryCount = 0;
+            Volatile.Write(ref _seekEventsSinceRequest, 0); // 이 요청 이후의 이벤트부터 다시 셉니다
             _lastTimerTimeMs = targetMs; // 뒤로 시크가 반복 랩으로 오인되지 않게 기준점 갱신
+
+            // 요청 직전의 실제 위치를 기억합니다. 목표에 못 미쳐도 이 위치에서 충분히 벗어났다면
+            // 시크가 무시된 게 아니라 다른 지점에 안착한 것이므로 재시도하지 않습니다(아래 UiTimer 참조).
+            _seekFromMs = Volatile.Read(ref _cachedTimeMs);
 
             // 일시정지 중에는 시크가 반영돼도 TimeChanged가 오지 않는 경우가 많아
             // 캐시를 목표값으로 미리 맞춥니다. 그대로 두면 도착 판정이 4초간 실패하며
@@ -2412,7 +2684,11 @@ namespace OctoPlayer
                     long target;
                     while ((target = Interlocked.Exchange(ref _seekRequestMs, -1)) >= 0)
                     {
+                        // set_time이 이 스레드에서 동기적으로 되울리는 TimeChanged(에코)를
+                        // Player_TimeChanged가 무시할 수 있도록 현재 스레드 ID를 표시합니다.
+                        Volatile.Write(ref _seekWorkerThreadId, Environment.CurrentManagedThreadId);
                         try { mp.Time = target; } catch { }
+                        finally { Volatile.Write(ref _seekWorkerThreadId, -1); }
                     }
                 }
                 finally
@@ -2439,10 +2715,21 @@ namespace OctoPlayer
             long time = Volatile.Read(ref _cachedTimeMs);
             long len = Volatile.Read(ref _cachedLengthMs);
 
-            // 구간 반복(A-B)
-            if (_abStartMs >= 0 && _abEndMs > _abStartMs && time >= _abEndMs)
+            // 구간 반복(A-B): 사용자가 직접 시크 중일 때는 되감지 않습니다(조작과 충돌).
+            // ApplySeek으로 되감아야 추적(pending)이 등록되어, 늦게 도착한 이벤트가 되감기를 또 부르지 않습니다.
+            if (_abStartMs >= 0 && _abEndMs > _abStartMs && !_isSeeking && _pendingSeekMs < 0 && time >= _abEndMs)
             {
-                SetPlayerTimeAsync(_abStartMs);
+                ApplySeek(_abStartMs);
+            }
+
+            // 자가 복구: 드문 경우 캡처 상실로 DragCompleted 없이 드래그가 끝나
+            // _isSeeking이 true로 남을 수 있어 여기서 풀어 줍니다.
+            if (_isSeeking && Mouse.LeftButton == MouseButtonState.Released && !SeekSlider.IsMouseCaptureWithin)
+            {
+                // 플래그만 지우면 드래그한 값이 버려져 이전 위치로 되돌아가 보이므로, 풀기 전에 적용합니다.
+                ApplySeekFromSlider();
+                _isSeeking = false;
+                _seekOnDragEnd = false;
             }
 
             if (_isSeeking)
@@ -2451,6 +2738,8 @@ namespace OctoPlayer
             }
 
             // 진행 중인 시크 유지: 도착했으면 종료, 무시된 것 같으면 제한 횟수만 재적용.
+            // 도착 판정은 이제 "진짜" 입력 스레드 이벤트로만 이뤄집니다. set_time이 호출 스레드에서
+            // 되울리는 목표값 에코는 Player_TimeChanged에서 걸러지므로 캐시에 들어오지 않습니다.
             // 허용 오차를 3초로 두는 이유: 키프레임 간격이 큰 파일은 목표에서 몇 초 떨어진
             // 지점에 안착하는데, 오차를 좁게 잡으면 "미도착"으로 오인해 시크를 계속 재적용
             // → 매번 키프레임으로 되돌아가 "원래 위치로 돌아가는" 현상이 됐습니다.
@@ -2461,21 +2750,57 @@ namespace OctoPlayer
                 if (time >= 0 && Math.Abs(time - _pendingSeekMs) <= 3000)
                 {
                     _pendingSeekMs = -1; // 목표(또는 그 근처 키프레임) 도착
+                    _lastTimerTimeMs = time; // 랜딩 위치를 기준점으로
                 }
-                else if (elapsed > 1000)
+                else
                 {
-                    if (_seekRetryCount < 2)
+                    // 시크 직후 프리롤(버퍼링) 중에는 재적용/포기 판단을 미룹니다. 프리롤 중 다시 시크하면 처음부터 다시 디코딩합니다.
+                    bool prerolling = _cachedBufferingPct < 100f
+                        && (DateTime.UtcNow - _lastBufferingUtc).TotalMilliseconds < 1500;
+
+                    // 입력 스레드가 시크 이후의 시간 이벤트를 하나도 보내지 않았다면 아직 판단할 근거가 없습니다.
+                    // (이 조건이 없으면 시크가 도착하기도 전에 재시도가 나가 같은 시크가 두 번 걸리며 화면이 되튑니다.)
+                    if (elapsed > 1000 && !prerolling && Volatile.Read(ref _seekEventsSinceRequest) > 0)
                     {
-                        // 바쁜 순간(버퍼링/트랙 전환)에 무시된 요청 재적용.
-                        // 1초 간격 최대 2회로 제한해 진행 중인 시크를 계속 재시작하지 않습니다.
-                        _seekRetryCount++;
-                        _pendingSeekUtc = DateTime.UtcNow;
-                        SetPlayerTimeAsync(_pendingSeekMs);
+                        // 재생 중에는 시크와 무관하게 시간이 자연히 흐르므로, 그 진행분을 더한 위치를 기준으로
+                        // 비교해야 "무시된 시크"가 정상 재생만으로 안착한 것처럼 보이지 않습니다.
+                        long natural = _seekFromMs;
+                        if (_cachedState == VLCState.Playing)
+                        {
+                            natural += (long)((DateTime.UtcNow - _lastSeekIssuedUtc).TotalMilliseconds * _playbackRate);
+                        }
+                        bool movedAway = _seekFromMs >= 0 && Math.Abs(time - natural) > 2000;
+                        if (movedAway)
+                        {
+                            // 목표 근처는 아니지만 시크 전 위치에서 확실히 벗어남 = 다른 지점(키프레임 등)에 안착.
+                            // 재시크하면 같은 곳으로 또 튀므로 실제 위치를 그대로 따릅니다.
+                            _lastTimerTimeMs = time;
+                            _pendingSeekMs = -1;
+                        }
+                        else if (_seekRetryCount < 2)
+                        {
+                            // 바쁜 순간(버퍼링/트랙 전환)에 무시된 요청 재적용.
+                            // 1초 간격 최대 2회로 제한해 진행 중인 시크를 계속 재시작하지 않습니다.
+                            _seekRetryCount++;
+                            _pendingSeekUtc = DateTime.UtcNow;
+                            Volatile.Write(ref _seekEventsSinceRequest, 0);
+                            SetPlayerTimeAsync(_pendingSeekMs);
+                        }
+                        else
+                        {
+                            // 포기: 일시정지 중에는 이벤트가 오지 않으므로 목표값을 캐시에 반영하고,
+                            // 재생 중에는 실제 위치를 그대로 따릅니다(억지로 목표를 표시하면 다시 튀어 보임).
+                            if (_cachedState == VLCState.Paused)
+                            {
+                                Volatile.Write(ref _cachedTimeMs, _pendingSeekMs);
+                                _lastTimerTimeMs = _pendingSeekMs;
+                            }
+                            _pendingSeekMs = -1;
+                        }
                     }
-                    else
+                    else if (elapsed > 10000)
                     {
-                        // 포기: 일시정지 중에는 이벤트가 오지 않으므로 목표값을 캐시에 반영하고,
-                        // 재생 중에는 실제 위치를 그대로 따릅니다(억지로 목표를 표시하면 다시 튀어 보임).
+                        // 안전망: 버퍼링이 끝나지 않는 경우에도 추적을 무한정 유지하지 않습니다.
                         if (_cachedState == VLCState.Paused)
                         {
                             Volatile.Write(ref _cachedTimeMs, _pendingSeekMs);
@@ -2498,8 +2823,7 @@ namespace OctoPlayer
                     long threshold = (long)(500 * Math.Max(1f, _playbackRate)) + 100;
                     if (len > 2000 && len - cur <= threshold)
                     {
-                        SetPlayerTimeAsync(0);
-                        cur = 0;
+                        ApplySeek(0); // 추적을 등록해 늦은 이벤트로 되감기가 중복 실행되지 않게 합니다
                     }
                 }
 
@@ -2586,18 +2910,19 @@ namespace OctoPlayer
             if (playing >= 0 && playing < _entries.Count)
             {
                 PlaylistList.SelectedIndex = playing;
-
-                _allowBringIntoView = true;
-                try
-                {
-                    PlaylistList.ScrollIntoView(_entries[playing]);
-                    PlaylistList.UpdateLayout(); // ScrollIntoView가 이 안에서 완료되도록(플래그 유효 범위 보장)
-                }
-                finally
-                {
-                    _allowBringIntoView = false;
-                }
             }
+
+            ScrollPlaylistToCurrent();
+        }
+
+        /// <summary>현재 재생 항목이 보이도록 재생목록을 스크롤합니다(패널이 표시 중일 때만).</summary>
+        private void ScrollPlaylistToCurrent()
+        {
+            int playing = _playlist.CurrentItemIndex;
+            if (playing < 0 || playing >= _entries.Count || !PlaylistList.IsVisible) return;
+            _allowBringIntoView = true;
+            try { PlaylistList.ScrollIntoView(_entries[playing]); PlaylistList.UpdateLayout(); }
+            finally { _allowBringIntoView = false; }
         }
 
         private void PlaylistList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
@@ -2698,6 +3023,89 @@ namespace OctoPlayer
             ShowToast(Loc.F("S_PlAddedToast", added));
         }
 
+        private void PlaylistRefresh_Click(object? sender, RoutedEventArgs e) => RefreshPlaylistFromDisk();
+
+        // 갱신 요청 세대. 스캔이 겹치면 늦게 끝난 요청이 먼저 끝난 요청의 결과를 되돌리므로 최신 것만 반영합니다.
+        private int _playlistRefreshVersion;
+
+        /// <summary>재생목록 항목들이 속한 폴더를 다시 탐색해 목록을 갱신합니다. 재생은 중단하지 않습니다.</summary>
+        private async void RefreshPlaylistFromDisk()
+        {
+            // 항목이 처음 등장한 순서대로 폴더를 모읍니다(같은 폴더는 한 번만 스캔).
+            var folders = new List<string>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (PlaylistItem item in _playlist.Items)
+            {
+                string? dir = Path.GetDirectoryName(item.FilePath);
+                if (!string.IsNullOrEmpty(dir) && seen.Add(dir))
+                {
+                    folders.Add(dir);
+                }
+            }
+
+            if (folders.Count == 0)
+            {
+                return;
+            }
+
+            int version = ++_playlistRefreshVersion;
+
+            // 폴더 열람은 느린 디스크에서 오래 걸릴 수 있어 UI 스레드 밖에서 수행합니다.
+            (List<string> files, List<string> failedFolders) = await Task.Run(() =>
+            {
+                var scanned = new List<string>();
+                var failed = new List<string>();
+                foreach (string folder in folders)
+                {
+                    if (PlaylistManager.TryScanFolderFiles(folder, out List<string> found))
+                    {
+                        scanned.AddRange(found);
+                    }
+                    else
+                    {
+                        failed.Add(folder);
+                    }
+                }
+                return (scanned, failed);
+            });
+
+            if (version != _playlistRefreshVersion)
+            {
+                return; // 더 새 갱신이 진행 중 → 이 결과는 폐기
+            }
+
+            // 접근하지 못한 폴더(네트워크 공유 끊김 등)의 기존 항목은 그대로 남깁니다.
+            // 잠깐 읽지 못했다는 이유로 목록에서 지우면 되돌릴 방법이 없습니다.
+            if (failedFolders.Count > 0)
+            {
+                var failedSet = new HashSet<string>(failedFolders, StringComparer.OrdinalIgnoreCase);
+                var known = new HashSet<string>(files, StringComparer.OrdinalIgnoreCase);
+                foreach (PlaylistItem item in _playlist.Items)
+                {
+                    string? dir = Path.GetDirectoryName(item.FilePath);
+                    if (!string.IsNullOrEmpty(dir) && failedSet.Contains(dir) && known.Add(item.FilePath))
+                    {
+                        files.Add(item.FilePath);
+                    }
+                }
+            }
+
+            if (files.Count == 0)
+            {
+                // 모든 폴더를 읽지 못한 경우: 목록을 비우면 복구할 수 없으므로 그대로 둡니다.
+                ShowToast(Loc.F("S_PlRefreshedToast", _playlist.Count));
+                return;
+            }
+
+            // 스캔이 끝난 시점의 현재 항목을 기준으로 유지합니다(스캔 도중 트랙이 바뀌었을 수 있음).
+            string? currentPath = _playlist.Current?.FilePath;
+
+            // 현재 파일이 사라졌더라도 재생은 그대로 둡니다(목록에 강조 항목만 없어집니다).
+            _ = _playlist.ReplaceItems(files, currentPath);
+            RefreshPlaylist();
+            ShowToast(Loc.F("S_PlRefreshedToast", _playlist.Count));
+        }
+
         private void PlaylistMenu_Remove(object? sender, RoutedEventArgs e)
         {
             int index = PlaylistList.SelectedIndex;
@@ -2775,6 +3183,10 @@ namespace OctoPlayer
             _playlistView = mode;
             PlaylistList.ItemTemplate = (DataTemplate)FindResource(
                 mode == PlaylistViewMode.Thumbnails ? "PlaylistThumbTemplate" : "PlaylistTitleTemplate");
+
+            // 템플릿을 바꾸면 항목 컨테이너가 다시 생성되면서 스크롤이 초기화되므로 다시 맞춥니다.
+            Dispatcher.BeginInvoke(DispatcherPriority.Loaded, ScrollPlaylistToCurrent);
+
             RequestThumbnailsIfNeeded();
             SaveSettings();
         }

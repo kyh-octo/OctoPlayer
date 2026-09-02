@@ -94,6 +94,7 @@
                   TextElement.FontFamily="Segoe UI" TextElement.FontSize="13"
                   MouseWheel="OverlayRoot_MouseWheel"
                   PreviewMouseDown="OverlayRoot_PreviewMouseDown"
+                  PreviewMouseUp="OverlayRoot_PreviewMouseUp"
                   MouseMove="OverlayRoot_MouseMove">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="*"/>
@@ -240,6 +241,8 @@
                     <DockPanel Grid.Row="0" Margin="10,8">
                         <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Padding="6,2"
                                 Content="✕" Click="Menu_TogglePlaylist" ToolTip="{DynamicResource S_TipClosePlaylist}"/>
+                        <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Padding="6,2"
+                                Content="↻" Click="PlaylistRefresh_Click" ToolTip="{DynamicResource S_TipRefreshPlaylist}"/>
                         <Button x:Name="ViewModeButton" DockPanel.Dock="Right" Style="{StaticResource IconButton}"
                                 Padding="6,2" Content="▤" Click="ViewModeButton_Click" ToolTip="{DynamicResource S_TipViewMode}"/>
                         <TextBlock Text="{DynamicResource S_Playlist}" FontWeight="SemiBold" VerticalAlignment="Center"/>
@@ -255,6 +258,7 @@
                             <ContextMenu x:Name="PlaylistMenu" Opened="PlaylistMenu_Opened">
                                 <MenuItem Header="{DynamicResource S_PlAddFiles}" Click="PlaylistMenu_AddFiles"/>
                                 <MenuItem Header="{DynamicResource S_PlAddFolder}" Click="PlaylistMenu_AddFolder"/>
+                                <MenuItem Header="{DynamicResource S_PlRefresh}" Click="PlaylistRefresh_Click"/>
                                 <Separator/>
                                 <MenuItem x:Name="MiPlRemove" Header="{DynamicResource S_PlRemove}" Click="PlaylistMenu_Remove"/>
                                 <MenuItem x:Name="MiPlDelete" Header="{DynamicResource S_PlDelete}" Click="PlaylistMenu_Delete"/>
@@ -316,8 +320,6 @@
                                         ClipToBounds="False" Background="Transparent"
                                         SizeChanged="ChapterMarkerCanvas_SizeChanged"/>
                                 <Slider x:Name="SeekSlider" Grid.Row="1" Style="{StaticResource MediaSlider}" Maximum="1000"
-                                        PreviewMouseDown="SeekSlider_PreviewMouseDown"
-                                        PreviewMouseUp="SeekSlider_PreviewMouseUp"
                                         ValueChanged="SeekSlider_ValueChanged"/>
                             </Grid>
                         </DockPanel>

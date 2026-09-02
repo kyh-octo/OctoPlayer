@@ -91,11 +91,14 @@
     <sys:String x:Key="S_TipSubtitles">자막 켜기/끄기 (Alt+H)</sys:String>
     <sys:String x:Key="S_TipViewMode">보기 방식 전환</sys:String>
     <sys:String x:Key="S_TipClosePlaylist">재생목록 닫기 (F6)</sys:String>
+    <sys:String x:Key="S_TipRefreshPlaylist">폴더를 다시 탐색해 재생목록 갱신</sys:String>
     <sys:String x:Key="S_TipWindowed">창 모드 (Esc)</sys:String>
     <sys:String x:Key="S_TipMinimize">최소화</sys:String>
     <sys:String x:Key="S_PlAddFiles">파일 추가...</sys:String>
     <sys:String x:Key="S_PlAddFolder">폴더 추가...</sys:String>
     <sys:String x:Key="S_PlAddedToast">재생목록에 {0}개 추가됨</sys:String>
+    <sys:String x:Key="S_PlRefresh">재생목록 갱신</sys:String>
+    <sys:String x:Key="S_PlRefreshedToast">재생목록 갱신: {0}개</sys:String>
     <sys:String x:Key="S_PlRemove">재생목록에서 제거</sys:String>
     <sys:String x:Key="S_PlDelete">파일 삭제...</sys:String>
     <sys:String x:Key="S_PlViewMode">보기 방식</sys:String>

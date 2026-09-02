@@ -38,6 +38,11 @@ namespace OctoPlayer.Services
         /// <summary>영상과 같은 이름의 자막 파일을 자동으로 불러올지 여부입니다.</summary>
         public bool AutoLoadSubtitles { get; set; } = true;
 
+        /// <summary>
+        /// 자막 켬/끔 상태입니다. 사용자가 자막을 끄면 다음 파일이나 다음 실행에서도 꺼진 채로 유지됩니다.
+        /// </summary>
+        public bool SubtitlesEnabled { get; set; } = true;
+
         /// <summary>마지막으로 보던 위치에서 이어서 재생할지 여부입니다.</summary>
         public bool ResumePlayback { get; set; } = true;
 

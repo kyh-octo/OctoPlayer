@@ -91,11 +91,14 @@
     <sys:String x:Key="S_TipSubtitles">Subtitles on/off (Alt+H)</sys:String>
     <sys:String x:Key="S_TipViewMode">Toggle view mode</sys:String>
     <sys:String x:Key="S_TipClosePlaylist">Close playlist (F6)</sys:String>
+    <sys:String x:Key="S_TipRefreshPlaylist">Rescan folders and refresh the playlist</sys:String>
     <sys:String x:Key="S_TipWindowed">Windowed mode (Esc)</sys:String>
     <sys:String x:Key="S_TipMinimize">Minimize</sys:String>
     <sys:String x:Key="S_PlAddFiles">Add Files...</sys:String>
     <sys:String x:Key="S_PlAddFolder">Add Folder...</sys:String>
     <sys:String x:Key="S_PlAddedToast">Added {0} item(s) to playlist</sys:String>
+    <sys:String x:Key="S_PlRefresh">Refresh Playlist</sys:String>
+    <sys:String x:Key="S_PlRefreshedToast">Playlist refreshed: {0} item(s)</sys:String>
     <sys:String x:Key="S_PlRemove">Remove from Playlist</sys:String>
     <sys:String x:Key="S_PlDelete">Delete File...</sys:String>
     <sys:String x:Key="S_PlViewMode">View Mode</sys:String>

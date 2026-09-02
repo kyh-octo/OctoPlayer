@@ -97,26 +97,63 @@ namespace OctoPlayer.Services
         /// </summary>
         public static List<string> ScanFolderFiles(string folderPath)
         {
+            TryScanFolderFiles(folderPath, out List<string> files);
+            return files;
+        }
+
+        /// <summary>폴더를 훑되 접근할 수 없으면 false를 반환합니다(갱신 시 목록을 통째로 잃지 않도록).</summary>
+        public static bool TryScanFolderFiles(string folderPath, out List<string> files)
+        {
+            files = new List<string>();
+
             if (!Directory.Exists(folderPath))
             {
-                return new List<string>();
+                return false;
             }
 
             try
             {
-                return Directory.EnumerateFiles(folderPath)
+                files = Directory.EnumerateFiles(folderPath)
                     .Where(SupportedFormats.IsSupported)
                     .OrderBy(Path.GetFileName, NaturalComparer.Instance)
                     .ToList();
+                return true;
             }
             catch (IOException)
             {
-                return new List<string>();
+                return false;
             }
             catch (UnauthorizedAccessException)
             {
-                return new List<string>();
+                return false;
             }
+        }
+
+        /// <summary>
+        /// 목록을 새 파일 목록으로 교체합니다(폴더 재탐색용). 현재 재생 항목 경로가 새 목록에 있으면
+        /// 그 항목을 현재로 유지하고, 셔플이 켜져 있으면 순서를 새로 섞되 현재 위치는 보존합니다.
+        /// 현재 항목이 유지되면 true를 반환합니다.
+        /// </summary>
+        public bool ReplaceItems(IEnumerable<string> paths, string? keepCurrentPath)
+        {
+            Clear();
+            foreach (string path in paths)
+            {
+                AddFile(path); // 중복/미지원은 내부에서 무시됨
+            }
+
+            int idx = keepCurrentPath == null
+                ? -1
+                : _items.FindIndex(i => string.Equals(i.FilePath, keepCurrentPath, StringComparison.OrdinalIgnoreCase));
+
+            if (IsShuffled)
+            {
+                FisherYates(_order);
+            }
+
+            // 현재 항목이 사라졌다면 위치를 비워 둡니다(재생은 그대로 두고 강조만 해제).
+            _position = idx >= 0 ? _order.IndexOf(idx) : -1;
+            return idx >= 0;
         }
 
         /// <summary>
