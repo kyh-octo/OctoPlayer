@@ -1,37 +1,38 @@
-; ============================================================================
-; OctoPlayer 설치 파일 스크립트 (Inno Setup 6)
-;
-; 빌드 방법: 같은 폴더의 build.ps1 실행 (게시 → 설치 파일 생성까지 자동)
-;   powershell -ExecutionPolicy Bypass -File build.ps1
-; 결과물: Setup\Output\OctoPlayer-Setup-x64.exe
-; ============================================================================
+﻿; OctoPlayer 설치 스크립트 (Inno Setup 6)
+; 빌드 방법: installer\build-installer.ps1 실행 (게시 → 설치파일 생성까지 자동)
+; 결과물: installer\output\OctoPlayer-Setup-<버전>.exe
 
-#define MyAppName "OctoPlayer"
-#define MyAppVersion "1.2.0"
-#define MyAppPublisher "OctoBrain Softworks"
-#define MyAppExeName "OctoPlayer.exe"
-#define MyGroupName "OctoBrain"
+#ifndef AppVersion
+  #define AppVersion "1.0.0"
+#endif
+#define AppName "OctoPlayer"
+#define AppPublisher "OctoBrain Softworks"
+#define AppExeName "OctoPlayer.exe"
+#define PublishDir "..\bin\Release\Publish"
 
 [Setup]
-; AppId는 업그레이드/제거 식별자이므로 바꾸지 마세요.
+; AppId는 업그레이드 인식용 고유 값 - 절대 변경하지 말 것
 AppId={{B7E5D6C4-3F2A-4A81-9C5D-1E8F0A2B7C64}
-AppName={#MyAppName}
-AppVersion={#MyAppVersion}
-AppPublisher={#MyAppPublisher}
-DefaultDirName={autopf}\{#MyGroupName}\{#MyAppName}
-; 시작 메뉴 그룹: OctoBrain (사용자가 바꾸지 않도록 그룹 선택 페이지는 생략)
-DefaultGroupName={#MyGroupName}
-DisableProgramGroupPage=yes
-; 관리자 권한 없이 사용자 단위로 설치(기본). 필요 시 대화상자에서 전체 사용자 설치 선택 가능.
-PrivilegesRequired=lowest
-PrivilegesRequiredOverridesAllowed=dialog
-OutputDir=Output
-OutputBaseFilename=OctoPlayer-Setup-x64
+AppName={#AppName}
+AppVersion={#AppVersion}
+AppVerName={#AppName} {#AppVersion}
+AppPublisher={#AppPublisher}
+DefaultDirName={autopf}\{#AppName}
+DefaultGroupName={#AppName}
+UninstallDisplayIcon={app}\{#AppExeName}
+UninstallDisplayName={#AppName}
+OutputDir=output
+OutputBaseFilename={#AppName}-Setup-{#AppVersion}
 SetupIconFile=..\Properties\OctoPlayer.ico
-UninstallDisplayIcon={app}\{#MyAppExeName}
-Compression=lzma2
+Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
+; 관리자 권한 없이 사용자 단위 설치 (프로그램 파일 대신 LocalAppData)
+PrivilegesRequired=lowest
+PrivilegesRequiredOverridesAllowed=dialog
+; 실행 중인 OctoPlayer를 감지해 종료 안내
+CloseApplications=yes
+RestartApplications=no
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 
@@ -40,29 +41,30 @@ Name: "korean"; MessagesFile: "compiler:Languages\Korean.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
-; 바탕화면 바로가기 생성 여부(체크박스, 기본 체크됨)
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
 [Files]
 ; self-contained 게시 결과 전체 (x86/arm64 libvlc는 제외)
-Source: "publish\*"; DestDir: "{app}"; \
-    Flags: ignoreversion recursesubdirs createallsubdirs; \
-    Excludes: "libvlc\win-x86\*,libvlc\win-arm64\*"
+Source: "{#PublishDir}\*"; Excludes: "*.pdb,*.xml,libvlc\win-x86\*,libvlc\win-arm64\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
 
 [Icons]
-; 시작 메뉴 (OctoBrain 그룹으로 정리)
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
-Name: "{group}\{#MyAppName} 제거"; Filename: "{uninstallexe}"
-; 바탕화면 (Tasks에서 선택 시)
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExeName}"
+Name: "{group}\{cm:UninstallProgram,{#AppName}}"; Filename: "{uninstallexe}"
+Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
 
 [Run]
 ; libVLC 플러그인 캐시(plugins.dat)를 미리 생성해 첫 실행부터 빠르게 시작되도록 합니다.
 ; (캐시가 없으면 libVLC가 실행마다 수백 개 플러그인을 전체 스캔해 시작이 수 초 느려집니다.)
-Filename: "{app}\{#MyAppExeName}"; Parameters: "--gen-plugins-cache"; \
-    StatusMsg: "미디어 엔진을 준비하는 중..."; Flags: runhidden waituntilterminated
-Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; \
-    Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#AppExeName}"; Parameters: "--gen-plugins-cache"; StatusMsg: "미디어 엔진을 준비하는 중..."; Flags: runhidden waituntilterminated
+Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
+
+[UninstallRun]
+; 제거 전에 실행 중인 앱 종료
+Filename: "{cmd}"; Parameters: "/C taskkill /F /IM {#AppExeName}"; Flags: runhidden; RunOnceId: "KillApp"
+
+[UninstallDelete]
+; 앱이 만든 설정/이어보기 기록 정리
+Type: filesandordirs; Name: "{userappdata}\OctoPlayer"
 
 [Code]
 { ============================================================================
@@ -105,25 +107,25 @@ procedure RegisterFileAssociations();
 var
   Exe, Ext, Rest: String;
 begin
-  Exe := ExpandConstant('{app}\{#MyAppExeName}');
+  Exe := ExpandConstant('{app}\{#AppExeName}');
 
   RegWriteStringValue(HKA, 'Software\Classes\' + ProgId, '', 'OctoPlayer 미디어 파일');
   RegWriteStringValue(HKA, 'Software\Classes\' + ProgId + '\DefaultIcon', '', '"' + Exe + '",0');
   RegWriteStringValue(HKA, 'Software\Classes\' + ProgId + '\shell\open', '', 'OctoPlayer로 재생');
   RegWriteStringValue(HKA, 'Software\Classes\' + ProgId + '\shell\open\command', '', '"' + Exe + '" "%1"');
 
-  RegWriteStringValue(HKA, 'Software\{#MyAppName}\Capabilities', 'ApplicationName', '{#MyAppName}');
-  RegWriteStringValue(HKA, 'Software\{#MyAppName}\Capabilities', 'ApplicationDescription',
+  RegWriteStringValue(HKA, 'Software\{#AppName}\Capabilities', 'ApplicationName', '{#AppName}');
+  RegWriteStringValue(HKA, 'Software\{#AppName}\Capabilities', 'ApplicationDescription',
     'OctoBrain Softworks 동영상 플레이어');
-  RegWriteStringValue(HKA, 'Software\RegisteredApplications', '{#MyAppName}',
-    'Software\{#MyAppName}\Capabilities');
+  RegWriteStringValue(HKA, 'Software\RegisteredApplications', '{#AppName}',
+    'Software\{#AppName}\Capabilities');
 
   Rest := ExtList;
   while Rest <> '' do
   begin
     Ext := NextExt(Rest);
     RegWriteStringValue(HKA, 'Software\Classes\' + Ext + '\OpenWithProgids', ProgId, '');
-    RegWriteStringValue(HKA, 'Software\{#MyAppName}\Capabilities\FileAssociations', Ext, ProgId);
+    RegWriteStringValue(HKA, 'Software\{#AppName}\Capabilities\FileAssociations', Ext, ProgId);
   end;
 
   SHChangeNotify(SHCNE_ASSOCCHANGED, 0, 0, 0);
@@ -135,8 +137,8 @@ var
   Ext, Rest: String;
 begin
   RegDeleteKeyIncludingSubkeys(Root, 'Software\Classes\' + ProgId);
-  RegDeleteKeyIncludingSubkeys(Root, 'Software\{#MyAppName}');
-  RegDeleteValue(Root, 'Software\RegisteredApplications', '{#MyAppName}');
+  RegDeleteKeyIncludingSubkeys(Root, 'Software\{#AppName}');
+  RegDeleteValue(Root, 'Software\RegisteredApplications', '{#AppName}');
 
   Rest := ExtList;
   while Rest <> '' do
@@ -146,7 +148,7 @@ begin
   end;
 
   { 탐색기의 "다른 앱 선택 → 찾아보기"가 만드는 항목: 앱이 제거되므로 함께 정리 }
-  RegDeleteKeyIncludingSubkeys(Root, 'Software\Classes\Applications\{#MyAppExeName}');
+  RegDeleteKeyIncludingSubkeys(Root, 'Software\Classes\Applications\{#AppExeName}');
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);

@@ -13,7 +13,7 @@
 
 ## 다운로드 (Download)
 
-**[최신 버전 다운로드 (Releases)](../../releases/latest)** — `OctoPlayer-Setup-x64.exe`를 받아 실행하면 됩니다.
+**[최신 버전 다운로드 (Releases)](../../releases/latest)** — `OctoPlayer-Setup-<버전>.exe`를 받아 실행하면 됩니다.
 
 - Windows 10/11 (64비트)
 - .NET 설치 불필요 (self-contained 배포)
@@ -51,7 +51,11 @@ dotnet run
 powershell -ExecutionPolicy Bypass -File Setup\build.ps1
 ```
 
-결과물: `Setup\Output\OctoPlayer-Setup-x64.exe`
+결과물: `installer\output\OctoPlayer-Setup-<버전>.exe` (버전은 csproj의 `<Version>`)
+
+### 릴리즈 (원클릭)
+
+`release.bat`을 실행하면 Git 최신 커밋 기준으로 설치 파일 빌드 → GitHub 릴리스(태그 `v<버전>`) 생성 → octo-brain.com 배포 갱신까지 자동으로 진행됩니다. 커밋되지 않은 로컬 변경은 릴리즈에 포함되지 않습니다. 옵션은 `installerelease.ps1` 머리말 참고.
 
 ## 라이선스 (License)
 

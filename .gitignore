@@ -10,8 +10,5 @@ obj/
 # WinForms 시절 백업 파일
 *.bak
 
-# 설치 파일 빌드 산출물 (OctoPlayer.iss, build.ps1은 추적함)
-Setup/publish/
-Setup/Output/
-Setup/Debug/
-Setup/Release/
+# 설치 파일 빌드 산출물 (installer 폴더의 .iss/.ps1은 추적함)
+installer/output/
