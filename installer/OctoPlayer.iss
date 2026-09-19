@@ -57,6 +57,8 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: deskto
 ; (캐시가 없으면 libVLC가 실행마다 수백 개 플러그인을 전체 스캔해 시작이 수 초 느려집니다.)
 Filename: "{app}\{#AppExeName}"; Parameters: "--gen-plugins-cache"; StatusMsg: "미디어 엔진을 준비하는 중..."; Flags: runhidden waituntilterminated
 Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
+; 앱 내 자동 업데이트(/SILENT /AUTOUPDATE=1)로 설치된 경우, 설치가 끝나면 앱을 다시 실행한다
+Filename: "{app}\{#AppExeName}"; Flags: nowait; Check: IsAutoUpdate
 
 [UninstallRun]
 ; 제거 전에 실행 중인 앱 종료
@@ -84,6 +86,12 @@ const
 
 procedure SHChangeNotify(EventID: Integer; Flags: Cardinal; Item1, Item2: Integer);
   external 'SHChangeNotify@shell32.dll stdcall';
+
+{ 앱 내 자동 업데이트(UpdateService)가 /AUTOUPDATE=1 매개변수로 실행했는지 }
+function IsAutoUpdate: Boolean;
+begin
+  Result := ExpandConstant('{param:AUTOUPDATE|0}') = '1';
+end;
 
 { 쉼표 목록에서 다음 항목을 꺼냅니다. Rest가 비면 끝. }
 function NextExt(var Rest: String): String;

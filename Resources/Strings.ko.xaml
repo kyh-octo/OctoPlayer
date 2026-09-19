@@ -215,6 +215,31 @@
 {0}</sys:String>
     <sys:String x:Key="S_AssocUnregFailMsg" xml:space="preserve">해제에 실패했습니다.
 {0}</sys:String>
+    <!-- ===== 업데이트 ===== -->
+    <sys:String x:Key="S_UpdSection">업데이트</sys:String>
+    <sys:String x:Key="S_UpdAutoCheck">시작할 때 자동으로 업데이트 확인</sys:String>
+    <sys:String x:Key="S_UpdCheckBtn">업데이트 확인</sys:String>
+    <sys:String x:Key="S_UpdInstallBtn">업데이트 설치</sys:String>
+    <sys:String x:Key="S_UpdNotes">변경 내역 보기</sys:String>
+    <sys:String x:Key="S_UpdCurrent">현재 버전 v{0}</sys:String>
+    <sys:String x:Key="S_UpdChecking">최신 릴리스를 확인하는 중...</sys:String>
+    <sys:String x:Key="S_UpdLatest">최신 버전을 사용 중입니다 (v{0})</sys:String>
+    <sys:String x:Key="S_UpdAvailable">새 버전 v{0}을(를) 설치할 수 있습니다 (현재 v{1})</sys:String>
+    <sys:String x:Key="S_UpdNoInstaller">새 버전 v{0}이(가) 있지만 설치 파일이 없습니다. 릴리스 페이지에서 확인하세요.</sys:String>
+    <sys:String x:Key="S_UpdCheckFailed">확인 실패: {0}</sys:String>
+    <sys:String x:Key="S_UpdTitle">업데이트</sys:String>
+    <sys:String x:Key="S_UpdPromptMsg" xml:space="preserve">새 버전 v{0}이(가) 있습니다. (현재 v{1})
+
+지금 업데이트하시겠습니까?
+설치 후 프로그램이 자동으로 다시 시작됩니다.</sys:String>
+    <sys:String x:Key="S_UpdDownloadTitle">업데이트 다운로드</sys:String>
+    <sys:String x:Key="S_UpdDownloading">v{0} 설치 파일을 내려받는 중...</sys:String>
+    <sys:String x:Key="S_UpdStarting">설치를 시작합니다. 잠시 후 프로그램이 다시 시작됩니다.</sys:String>
+    <sys:String x:Key="S_UpdDownloadFailed" xml:space="preserve">업데이트 다운로드에 실패했습니다.
+{0}
+
+릴리스 페이지에서 직접 내려받을 수 있습니다.</sys:String>
+
     <sys:String x:Key="S_OK">확인</sys:String>
     <sys:String x:Key="S_Cancel">취소</sys:String>
     <sys:String x:Key="S_ControllerTitle">제어창</sys:String>

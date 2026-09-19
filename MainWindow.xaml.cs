@@ -219,6 +219,9 @@ namespace OctoPlayer
             // 이전 버전이 삭제된 뒤에도 레지스트리에 남은 "죽은 연결 등록"을 현재 경로로 복구합니다.
             _ = Task.Run(FileAssociations.RepairIfStale);
 
+            // 시작 시 자동 업데이트 확인 (환경 설정에서 끌 수 있음)
+            _ = UpdatePrompt.RunStartupCheckAsync(_settings, () => this);
+
             if (_startupArgs.Length > 0)
             {
                 OpenPaths(_startupArgs, _settings.OpenFolderScan); // 준비 전이므로 큐에 저장됨
@@ -2166,7 +2169,7 @@ namespace OctoPlayer
         private void Menu_About(object? sender, RoutedEventArgs e)
         {
             InfoWindow.Show(this, Loc.T("S_AboutTitle"),
-                "OctoPlayer\n\n" +
+                $"OctoPlayer v{UpdateService.CurrentVersion}\n\n" +
                 $"{Loc.T("S_AboutBody")}\n" +
                 "OctoBrain Softworks\n\n" +
                 $"LibVLCSharp {typeof(LibVLC).Assembly.GetName().Version}\n" +

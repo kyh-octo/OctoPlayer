@@ -77,6 +77,9 @@ namespace OctoPlayer.Services
         /// <summary>영상 캡처 저장 폴더입니다(비어 있으면 사진\OctoPlayer).</summary>
         public string? CaptureFolder { get; set; }
 
+        /// <summary>시작할 때 GitHub 최신 릴리스를 확인해 새 버전이 있으면 설치할지 묻습니다.</summary>
+        public bool CheckForUpdates { get; set; } = true;
+
         private static readonly JsonSerializerOptions SerializerOptions = new()
         {
             WriteIndented = true

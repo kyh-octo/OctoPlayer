@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Media;
 using OctoPlayer.Services;
 
@@ -64,12 +65,13 @@ namespace OctoPlayer
         private readonly RadioButton _langAuto;
         private readonly RadioButton _langKo;
         private readonly RadioButton _langEn;
+        private readonly CheckBox _autoUpdateBox;
 
         public SettingsWindow(Services.AppSettings settings)
         {
             _settings = settings;
             Title = Loc.T("S_SettingsTitle");
-            DialogTheme.Setup(this, 480, 790);
+            DialogTheme.Setup(this, 480, 900);
 
             var root = new StackPanel { Margin = new Thickness(20, 12, 20, 0) };
 
@@ -244,6 +246,73 @@ namespace OctoPlayer
             root.Children.Add(assocStatus);
             root.Children.Add(assocRow);
 
+            // ----- 업데이트 -----
+            root.Children.Add(Section(Loc.T("S_UpdSection")));
+            _autoUpdateBox = CheckRow(Loc.T("S_UpdAutoCheck"), settings.CheckForUpdates);
+            var updateStatus = new TextBlock
+            {
+                Text = Loc.F("S_UpdCurrent", UpdateService.CurrentVersion),
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = (Brush)Application.Current.FindResource("TextDimBrush"),
+                Margin = new Thickness(0, 0, 0, 6)
+            };
+            UpdateInfo? update = null;
+            var checkUpdate = DialogTheme.MakeButton(Loc.T("S_UpdCheckBtn"), accent: true);
+            checkUpdate.Margin = new Thickness(0, 0, 6, 0);
+            var installUpdate = DialogTheme.MakeButton(Loc.T("S_UpdInstallBtn"));
+            installUpdate.IsEnabled = false;
+            var notesLink = new Hyperlink(new Run(Loc.T("S_UpdNotes")))
+            {
+                Foreground = (Brush)Application.Current.FindResource("AccentBrush")
+            };
+            notesLink.Click += (_, _) => UpdateService.OpenReleasePage(update?.ReleaseUrl);
+            var notesText = new TextBlock(notesLink)
+            {
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(12, 0, 0, 0)
+            };
+            checkUpdate.Click += async (_, _) =>
+            {
+                checkUpdate.IsEnabled = false;
+                installUpdate.IsEnabled = false;
+                updateStatus.Text = Loc.T("S_UpdChecking");
+                try
+                {
+                    update = await UpdateService.CheckAsync();
+                    if (!update.IsNewer)
+                        updateStatus.Text = Loc.F("S_UpdLatest", UpdateService.CurrentVersion);
+                    else if (string.IsNullOrEmpty(update.InstallerUrl))
+                        updateStatus.Text = Loc.F("S_UpdNoInstaller", update.Version);
+                    else
+                    {
+                        updateStatus.Text = Loc.F("S_UpdAvailable", update.Version, UpdateService.CurrentVersion);
+                        installUpdate.IsEnabled = true;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    update = null;
+                    updateStatus.Text = Loc.F("S_UpdCheckFailed", ex.Message);
+                }
+                finally
+                {
+                    checkUpdate.IsEnabled = true;
+                }
+            };
+            installUpdate.Click += (_, _) =>
+            {
+                if (update is null) return;
+                Apply();          // 설치 후 앱이 다시 시작되므로 편집 중인 설정을 먼저 저장
+                _settings.Save();
+                UpdateDownloadWindow.Run(this, update);
+            };
+            var updateRow = new StackPanel { Orientation = Orientation.Horizontal };
+            updateRow.Children.Add(checkUpdate);
+            updateRow.Children.Add(installUpdate);
+            updateRow.Children.Add(notesText);
+            root.Children.Add(updateStatus);
+            root.Children.Add(updateRow);
+
             // ----- 확인/취소 -----
             Button ok = DialogTheme.MakeButton(Loc.T("S_OK"), accent: true);
             ok.IsDefault = true;
@@ -283,6 +352,7 @@ namespace OctoPlayer
             _settings.AutoLoadSubtitles = _autoSubBox.IsChecked == true;
             _settings.RememberWindowSize = _rememberSizeBox.IsChecked == true;
             _settings.AlwaysOnTop = _alwaysOnTopBox.IsChecked == true;
+            _settings.CheckForUpdates = _autoUpdateBox.IsChecked == true;
             _settings.CaptureFolder = string.IsNullOrWhiteSpace(_captureFolderBox.Text)
                 ? null
                 : _captureFolderBox.Text.Trim();

@@ -215,6 +215,31 @@ To make OctoPlayer the default player, right-click a video file â†’ Open with â†
 {0}</sys:String>
     <sys:String x:Key="S_AssocUnregFailMsg" xml:space="preserve">Unregister failed.
 {0}</sys:String>
+    <!-- ===== Updates ===== -->
+    <sys:String x:Key="S_UpdSection">Updates</sys:String>
+    <sys:String x:Key="S_UpdAutoCheck">Check for updates automatically at startup</sys:String>
+    <sys:String x:Key="S_UpdCheckBtn">Check for Updates</sys:String>
+    <sys:String x:Key="S_UpdInstallBtn">Install Update</sys:String>
+    <sys:String x:Key="S_UpdNotes">View release notes</sys:String>
+    <sys:String x:Key="S_UpdCurrent">Current version v{0}</sys:String>
+    <sys:String x:Key="S_UpdChecking">Checking for the latest release...</sys:String>
+    <sys:String x:Key="S_UpdLatest">You are up to date (v{0})</sys:String>
+    <sys:String x:Key="S_UpdAvailable">Version v{0} is available (current v{1})</sys:String>
+    <sys:String x:Key="S_UpdNoInstaller">Version v{0} is available but has no installer. See the releases page.</sys:String>
+    <sys:String x:Key="S_UpdCheckFailed">Check failed: {0}</sys:String>
+    <sys:String x:Key="S_UpdTitle">Update</sys:String>
+    <sys:String x:Key="S_UpdPromptMsg" xml:space="preserve">Version v{0} is available (current v{1}).
+
+Update now?
+The app will restart automatically after installation.</sys:String>
+    <sys:String x:Key="S_UpdDownloadTitle">Downloading Update</sys:String>
+    <sys:String x:Key="S_UpdDownloading">Downloading the v{0} installer...</sys:String>
+    <sys:String x:Key="S_UpdStarting">Starting the installer. The app will restart shortly.</sys:String>
+    <sys:String x:Key="S_UpdDownloadFailed" xml:space="preserve">Update download failed.
+{0}
+
+You can download it manually from the releases page.</sys:String>
+
     <sys:String x:Key="S_OK">OK</sys:String>
     <sys:String x:Key="S_Cancel">Cancel</sys:String>
     <sys:String x:Key="S_ControllerTitle">Controller</sys:String>
