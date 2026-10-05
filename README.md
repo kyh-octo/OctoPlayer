@@ -67,3 +67,8 @@ OctoPlayer의 소스 코드는 [MIT 라이선스](LICENSE)로 배포됩니다.
 - [libVLC](https://www.videolan.org/vlc/libvlc.html) (VideoLAN.LibVLC.Windows) — LGPL-2.1
 
 설치 파일에는 libVLC 바이너리가 포함되며, 해당 바이너리는 LGPL-2.1 조건을 따릅니다.
+
+
+### Signed release builds
+
+See [installer/SIGNING.md](installer/SIGNING.md) for the fail-closed signed build pipeline. Signing does not change the application source license. Bundled third-party components retain their own licenses; installed license texts and source/replacement information are in `licenses/` and `THIRD-PARTY-NOTICES.md`.

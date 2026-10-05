@@ -11,6 +11,10 @@
 #define PublishDir "..\bin\Release\Publish"
 
 [Setup]
+#ifdef SignedBuild
+SignTool=OctoSign
+SignedUninstaller=yes
+#endif
 ; AppId는 업그레이드 인식용 고유 값 - 절대 변경하지 말 것
 AppId={{B7E5D6C4-3F2A-4A81-9C5D-1E8F0A2B7C64}
 AppName={#AppName}

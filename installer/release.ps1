@@ -18,6 +18,7 @@
 
 param(
     [switch]$SkipWebsite,
+    [switch]$RequireSignedRelease,
     [switch]$SkipRelease,
     [switch]$InPlace,
     [switch]$NoSync,
@@ -26,6 +27,8 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+if ($RequireSignedRelease -and $env:OCTO_CODESIGN -ne '1') { throw 'Signed release requires OCTO_CODESIGN=1.' }
+if ($RequireSignedRelease -or $env:OCTO_CODESIGN -eq '1') { $SkipWebsite = $true }
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
 
@@ -103,7 +106,7 @@ $worktree = $null
 try {
     if ($InPlace) {
         Step "[2/5] 설치 파일 빌드 (현재 폴더)"
-        & (Join-Path $PSScriptRoot "build-installer.ps1") -SkipWebsite
+        & (Join-Path $PSScriptRoot "build-installer.ps1") -SkipWebsite -RequireSignedRelease:$RequireSignedRelease
         if ($LASTEXITCODE) { throw "빌드 실패 (exit $LASTEXITCODE)" }
     } else {
         $worktree = Join-Path $env:TEMP "octo-release\$AppName"
@@ -114,12 +117,14 @@ try {
         }
         git worktree prune
         Run-Git @("worktree", "add", "--quiet", "--detach", $worktree, $shaFull)
-        & (Join-Path $worktree "installer\build-installer.ps1") -SkipWebsite
+        & (Join-Path $worktree "installer\build-installer.ps1") -SkipWebsite -RequireSignedRelease:$RequireSignedRelease
         if ($LASTEXITCODE) { throw "빌드 실패 (exit $LASTEXITCODE)" }
         $built = Join-Path $worktree "installer\output\$installerName"
         if (-not (Test-Path $built)) { throw "설치 파일이 생성되지 않았습니다: $built" }
         New-Item -ItemType Directory -Force $outputDir | Out-Null
         Copy-Item $built $installer -Force
+        $sum = Join-Path $worktree "installer\output\SHA256SUMS.txt"
+        if ($env:OCTO_CODESIGN -eq '1') { if (-not (Test-Path -LiteralPath $sum)) { throw 'Signed release checksum missing.' }; Copy-Item -LiteralPath $sum -Destination (Join-Path $outputDir 'SHA256SUMS.txt') -Force }
     }
 } finally {
     if ($worktree -and (Test-Path $worktree)) {
@@ -128,6 +133,8 @@ try {
     }
 }
 if (-not (Test-Path $installer)) { throw "설치 파일을 찾을 수 없습니다: $installer" }
+$releaseAssets = @($installer)
+if ($env:OCTO_CODESIGN -eq '1') { $releaseAssets += (Join-Path $outputDir 'SHA256SUMS.txt'); & (Join-Path $PSScriptRoot 'verify-signature.ps1') -Path $installer -SignTool $env:OCTO_SIGNTOOL }
 $mb = [math]::Round((Get-Item $installer).Length / 1MB, 1)
 Write-Host "설치 파일: $installer ($mb MB)" -ForegroundColor Green
 
@@ -140,7 +147,7 @@ if ($SkipRelease) {
     if ($LASTEXITCODE -ne 0) { throw "릴리스 목록 조회 실패" }
     if ($existing -contains $tag) {
         Write-Host "릴리스 $tag 존재 → 설치 파일 교체 업로드" -ForegroundColor Yellow
-        & $gh release upload $tag $installer -R $Repo --clobber
+        & $gh release upload $tag @releaseAssets -R $Repo --clobber
         if ($LASTEXITCODE -ne 0) { throw "릴리스 자산 업로드 실패" }
     } else {
         if (-not $tagExists) {
@@ -166,7 +173,7 @@ if ($SkipRelease) {
             Write-Host "릴리스 노트: 커밋 로그에서 자동 생성 ($($log.Count)줄)"
         }
         Write-Host "릴리스 $tag 생성 + 설치 파일 업로드" -ForegroundColor Yellow
-        & $gh release create $tag $installer -R $Repo --title "$AppName v$version" --notes-file $NotesFile --latest
+        & $gh release create $tag @releaseAssets -R $Repo --title "$AppName v$version" --notes-file $NotesFile --latest
         if ($LASTEXITCODE -ne 0) { throw "릴리스 생성 실패" }
     }
     Write-Host "https://github.com/$Repo/releases/tag/$tag" -ForegroundColor Green
