@@ -1,5 +1,8 @@
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Security.Cryptography;
+using System.Text;
 using OctoPlayer.Models;
 
 namespace OctoPlayer.Services
@@ -96,49 +99,77 @@ namespace OctoPlayer.Services
             }
         }
 
-        /// <summary>
-        /// 저장된 설정을 불러옵니다. 파일이 없거나 손상된 경우 기본값을 반환합니다.
-        /// </summary>
-        public static AppSettings Load()
-        {
-            try
-            {
-                string path = SettingsFilePath;
-                if (!File.Exists(path))
-                {
-                    return new AppSettings();
-                }
+        private JsonObject _savedValues = new();
 
-                string json = File.ReadAllText(path);
-                return JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings();
-            }
-            catch
+        public AppSettings() => _savedValues = Snapshot();
+
+        private JsonObject Snapshot() => JsonSerializer.SerializeToNode(this)!.AsObject();
+
+        /// <summary>저장된 설정 또는 백업을 읽고, 모두 없으면 기본값을 반환합니다.</summary>
+        public static AppSettings Load() => LoadFrom(SettingsFilePath);
+
+        internal static AppSettings LoadFrom(string path)
+        {
+            foreach (string candidate in new[] { path, path + ".bak" })
             {
-                // 설정을 읽지 못하면 기본값으로 진행합니다.
-                return new AppSettings();
+                try
+                {
+                    var settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(candidate));
+                    if (settings == null) continue;
+                    settings._savedValues = settings.Snapshot();
+                    return settings;
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+                {
+                    // 설정 파일이 손상되면 마지막 저장의 백업을 읽습니다.
+                }
             }
+            return new AppSettings();
         }
 
-        /// <summary>
-        /// 현재 설정을 디스크에 저장합니다. 실패해도 앱 동작에는 영향을 주지 않습니다.
-        /// </summary>
-        public void Save()
+        public bool Save() => SaveTo(SettingsFilePath);
+
+        internal bool SaveTo(string path)
         {
+            string? temp = null;
+            bool locked = false;
+            string key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Path.GetFullPath(path).ToUpperInvariant())));
+            using var mutex = new Mutex(false, @"Local\OctoPlayer.Settings." + key);
             try
             {
-                string path = SettingsFilePath;
-                string? dir = Path.GetDirectoryName(path);
-                if (!string.IsNullOrEmpty(dir))
+                try { locked = mutex.WaitOne(TimeSpan.FromSeconds(5)); }
+                catch (AbandonedMutexException) { locked = true; }
+                if (!locked) return false;
+                Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
+                JsonObject current = Snapshot();
+                JsonObject merged = LoadFrom(path).Snapshot();
+                // 이전에 불러온 값 전체를 쓰면 다른 창에서 바꾼 설정이 종료 시 되돌아갑니다.
+                // 이 창이 실제로 바꾼 항목만 최신 파일에 반영합니다.
+                foreach (var property in current)
                 {
-                    Directory.CreateDirectory(dir);
+                    if (!JsonNode.DeepEquals(property.Value, _savedValues[property.Key]))
+                        merged[property.Key] = property.Value?.DeepClone();
                 }
-
-                string json = JsonSerializer.Serialize(this, SerializerOptions);
-                File.WriteAllText(path, json);
+                temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+                File.WriteAllText(temp, merged.ToJsonString(SerializerOptions));
+                if (File.Exists(path)) File.Replace(temp, path, path + ".bak");
+                else File.Move(temp, path);
+                _savedValues = current;
+                return true;
             }
-            catch
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
             {
-                // 저장 실패는 무시합니다.
+                System.Diagnostics.Trace.TraceError($"Settings save failed: {ex}");
+                return false;
+            }
+            finally
+            {
+                if (temp != null && File.Exists(temp))
+                {
+                    try { File.Delete(temp); }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+                }
+                if (locked) mutex.ReleaseMutex();
             }
         }
     }

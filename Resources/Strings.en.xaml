@@ -240,6 +240,7 @@ The app will restart automatically after installation.</sys:String>
 
 You can download it manually from the releases page.</sys:String>
 
+    <sys:String x:Key="S_SettingsSaveFailed">Could not save settings. Check write permissions for the settings folder and available disk space.</sys:String>
     <sys:String x:Key="S_OK">OK</sys:String>
     <sys:String x:Key="S_Cancel">Cancel</sys:String>
     <sys:String x:Key="S_ControllerTitle">Controller</sys:String>

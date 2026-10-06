@@ -2083,7 +2083,9 @@ namespace OctoPlayer
             var dialog = new SettingsWindow(_settings) { Owner = this };
             if (dialog.ShowDialog() == true)
             {
-                _settings.Save();
+                if (!_settings.Save())
+                    MessageBox.Show(this, Loc.T("S_SettingsSaveFailed"), "OctoPlayer",
+                        MessageBoxButton.OK, MessageBoxImage.Error);
                 ApplyRuntimeSettings();
 
                 // 언어 변경은 리소스 사전 교체로 즉시 반영됩니다(DynamicResource).

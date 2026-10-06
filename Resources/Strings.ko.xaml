@@ -240,6 +240,7 @@
 
 릴리스 페이지에서 직접 내려받을 수 있습니다.</sys:String>
 
+    <sys:String x:Key="S_SettingsSaveFailed">설정을 저장하지 못했습니다. 설정 폴더의 쓰기 권한과 디스크 여유 공간을 확인해 주세요.</sys:String>
     <sys:String x:Key="S_OK">확인</sys:String>
     <sys:String x:Key="S_Cancel">취소</sys:String>
     <sys:String x:Key="S_ControllerTitle">제어창</sys:String>
